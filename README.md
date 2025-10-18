@@ -1,0 +1,1 @@
+# clippster-prototype
