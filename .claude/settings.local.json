@@ -15,7 +15,9 @@
       "Bash(git rm:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "WebFetch(domain:www.lemonfox.ai)"
+      "WebFetch(domain:www.lemonfox.ai)",
+      "WebSearch",
+      "WebFetch(domain:openrouter.ai)"
     ],
     "deny": [],
     "ask": []
