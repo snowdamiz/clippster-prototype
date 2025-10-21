@@ -55,11 +55,11 @@ export class PumpFunService {
   ): Promise<void> {
     logIfEnabled(LogLevel.DEBUG, verbose, `Downloading complete stream to: ${outputPath}`);
 
-    if (!stream.url || !stream.url.includes('.m3u8')) {
+    const streamUrl = stream.url || stream.playlistUrl;
+
+    if (!streamUrl || !streamUrl.includes('.m3u8')) {
       throw new Error('Invalid or missing HLS stream URL');
     }
-
-    const streamUrl = stream.url; // Ensure it's defined
 
     const ffmpegPath = options.ffmpegPath || 'ffmpeg';
     const outputDir = path.dirname(outputPath);

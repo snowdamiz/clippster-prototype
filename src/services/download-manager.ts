@@ -46,7 +46,7 @@ export class DownloadManager {
     mintId: string,
     downloadType: DownloadType
   ): string {
-    const streamId = stream.clip_id || stream.id || 'stream';
+    const streamId = stream.clipId || stream.clip_id || stream.id || 'stream';
     const mintPrefix = mintId.slice(0, 8);
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
     return `${downloadType}_${mintPrefix}_${streamId}_${timestamp}.mp4`;
@@ -100,7 +100,8 @@ export class DownloadManager {
         return { success: false, error };
       }
 
-      logIfEnabled(LogLevel.INFO, verbose, `Found most recent stream: ${stream.clip_id || stream.id}`);
+      const streamId = stream.clipId || stream.clip_id || stream.id || 'unknown';
+      logIfEnabled(LogLevel.INFO, verbose, `Found most recent stream: ${streamId}`);
 
       // Generate filename and ensure output directory exists
       const filename = this.generateFilename(stream, mintId, DownloadType.COMPLETE);

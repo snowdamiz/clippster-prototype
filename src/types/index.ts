@@ -16,9 +16,11 @@ export interface ParsedArguments {
 
 export interface StreamClip {
   clip_id?: string;
+  clipId?: string;
   id?: string;
   duration?: number;
   url?: string;
+  playlistUrl?: string;
   [key: string]: any;
 }
 
