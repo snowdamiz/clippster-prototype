@@ -144,13 +144,14 @@ export class PumpFunService {
   }
 
   /**
-   * Gets the most recent complete stream for a mint ID
+   * Gets a stream at a specific index for a mint ID
    * @param mintId The SPL mint ID
+   * @param index The index of the stream (1=newest, 2=second newest, etc.)
    * @param verbose Whether to enable verbose logging
-   * @returns Promise resolving to the most recent stream or null
+   * @returns Promise resolving to the stream at the specified index or null
    */
-  async getMostRecentStream(mintId: string, verbose: boolean = false): Promise<StreamClip | null> {
-    logIfEnabled(LogLevel.DEBUG, verbose, `Fetching most recent stream for mint: ${mintId}`);
+  async getStreamAtIndex(mintId: string, index: number = 1, verbose: boolean = false): Promise<StreamClip | null> {
+    logIfEnabled(LogLevel.DEBUG, verbose, `Fetching stream at index ${index} for mint: ${mintId}`);
 
     const streamResponse = await this.getCompleteStreams(mintId, 20, verbose);
 
@@ -159,17 +160,32 @@ export class PumpFunService {
       return null;
     }
 
-    // Sort by creation date or other timestamp if available
-    // For now, we'll assume the API returns streams in descending order (most recent first)
-    const mostRecent = streamResponse.clips[0];
-    if (!mostRecent) {
-      logIfEnabled(LogLevel.INFO, verbose, 'No streams found in response');
+    if (index < 1 || index > streamResponse.clips.length) {
+      logIfEnabled(LogLevel.ERROR, verbose, `Invalid index ${index}. Available streams: ${streamResponse.clips.length}`);
       return null;
     }
 
-    logIfEnabled(LogLevel.DEBUG, verbose, 'Found most recent stream', { streamId: mostRecent.id || mostRecent.clip_id });
+    // API returns streams in descending order (most recent first)
+    const stream = streamResponse.clips[index - 1];
+    if (!stream) {
+      logIfEnabled(LogLevel.INFO, verbose, 'No stream found at specified index');
+      return null;
+    }
 
-    return mostRecent;
+    const indexLabel = index === 1 ? 'most recent stream' : `stream at index ${index}`;
+    logIfEnabled(LogLevel.DEBUG, verbose, `Found ${indexLabel}`, { streamId: stream.id || stream.clip_id });
+
+    return stream;
+  }
+
+  /**
+   * Gets the most recent complete stream for a mint ID
+   * @param mintId The SPL mint ID
+   * @param verbose Whether to enable verbose logging
+   * @returns Promise resolving to the most recent stream or null
+   */
+  async getMostRecentStream(mintId: string, verbose: boolean = false): Promise<StreamClip | null> {
+    return this.getStreamAtIndex(mintId, 1, verbose);
   }
 
   /**

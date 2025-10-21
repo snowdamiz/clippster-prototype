@@ -49,6 +49,27 @@ export function parseArguments(args: string[]): ParsedArguments {
         }
         break;
 
+      case '--index':
+        if (i + 1 < args.length) {
+          const indexStr = args[++i];
+          if (indexStr) {
+            const index = parseInt(indexStr, 10);
+            if (!isNaN(index) && index > 0) {
+              options.index = index;
+            } else {
+              console.error('Error: --index requires a positive integer (1=newest, 2=second newest, etc.)');
+              process.exit(1);
+            }
+          } else {
+            console.error('Error: --index requires a positive integer (1=newest, 2=second newest, etc.)');
+            process.exit(1);
+          }
+        } else {
+          console.error('Error: --index requires a positive integer');
+          process.exit(1);
+        }
+        break;
+
       default:
         if (arg.startsWith('-')) {
           console.warn(`Warning: Unknown option ${arg}`);
@@ -69,13 +90,14 @@ export function generateHelpText(): string {
   return `
 Usage: clippster [options] <spl_mint_id>
 
-A CLI tool for downloading the most recent stream from SPL mint IDs
+A CLI tool for downloading streams from SPL mint IDs
 
 Options:
   -h, --help           Show this help message
   -v, --version        Show version number
   --verbose            Enable verbose output
   --output <dir>       Output directory for downloads (default: ./downloads)
+  --index <number>     Download stream at index (1=newest, 2=second newest, etc.)
 
 Arguments:
   spl_mint_id          The SPL mint ID to download from (base58 string, typically 43-44 characters)
@@ -84,6 +106,8 @@ Examples:
   clippster 11111111111111111111111111111112
   clippster --verbose EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
   clippster --output ./videos 11111111111111111111111111111112
+  clippster --index 2 11111111111111111111111111111112
+  clippster --index 5 --verbose 11111111111111111111111111111112
   clippster --help
 `;
 }

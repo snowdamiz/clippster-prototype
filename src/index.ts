@@ -64,7 +64,9 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
     const downloadManager = new DownloadManager();
 
     try {
-      logIfEnabled(LogLevel.INFO, !!options.verbose, 'Starting stream download...');
+      const index = options.index || 1;
+      const indexDescription = index === 1 ? 'most recent stream' : `stream at index ${index}`;
+      logIfEnabled(LogLevel.INFO, !!options.verbose, `Starting download of ${indexDescription}...`);
 
       const results = await downloadManager.processDownloads(mintId, options);
 
@@ -73,7 +75,7 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
       console.log(`\n📊 Download Summary:`);
 
       if (success && file) {
-        console.log(`  ✅ Successfully downloaded and processed stream`);
+        console.log(`  ✅ Successfully downloaded and processed ${indexDescription}`);
         console.log(`  📹 Video-only: ${file}`);
         if (audioFile) {
           console.log(`  🎵 Audio-only: ${audioFile}`);

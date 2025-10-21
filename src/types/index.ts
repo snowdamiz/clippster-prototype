@@ -7,6 +7,7 @@ export interface CLIOptions {
   version?: boolean;
   verbose?: boolean;
   output?: string | undefined;
+  index?: number;
 }
 
 export interface ParsedArguments {

@@ -75,33 +75,37 @@ export class DownloadManager {
   }
 
   /**
-   * Downloads the most recent complete stream for a given mint ID
+   * Downloads a stream at a specific index for a given mint ID
    * @param mintId The SPL mint ID
    * @param outputDir Output directory for downloads
    * @param options CLI options
    * @returns Promise resolving to download results
    */
-  async downloadMostRecentStream(
+  async downloadStream(
     mintId: string,
     outputDir: string,
     options: CLIOptions
   ): Promise<{ success: boolean; file?: string; audioFile?: string; error?: string }> {
     const verbose = options.verbose || false;
+    const index = options.index || 1;
 
-    logIfEnabled(LogLevel.INFO, verbose, 'Starting download of most recent stream');
+    const indexDescription = index === 1 ? 'most recent stream' : `stream at index ${index}`;
+    logIfEnabled(LogLevel.INFO, verbose, `Starting download of ${indexDescription}`);
 
     try {
-      // Get the most recent stream
-      const stream = await this.pumpFunService.getMostRecentStream(mintId, verbose);
+      // Get the stream at the specified index
+      const stream = await this.pumpFunService.getStreamAtIndex(mintId, index, verbose);
 
       if (!stream) {
-        const error = 'No complete streams found for this mint ID';
+        const error = index === 1
+          ? 'No complete streams found for this mint ID'
+          : `No stream found at index ${index} for this mint ID`;
         logIfEnabled(LogLevel.INFO, verbose, error);
         return { success: false, error };
       }
 
       const streamId = stream.clipId || stream.clip_id || stream.id || 'unknown';
-      logIfEnabled(LogLevel.INFO, verbose, `Found most recent stream: ${streamId}`);
+      logIfEnabled(LogLevel.INFO, verbose, `Found ${indexDescription}: ${streamId}`);
 
       // Generate filename and ensure output directory exists
       const filename = this.generateFilename(stream, mintId, DownloadType.COMPLETE);
@@ -150,7 +154,7 @@ export class DownloadManager {
   }
 
   /**
-   * Main download orchestration method - always downloads the most recent stream
+   * Main download orchestration method - downloads stream at specified index (default: newest)
    * @param mintId The SPL mint ID
    * @param options CLI options
    * @returns Promise resolving to download results
@@ -160,12 +164,14 @@ export class DownloadManager {
   }> {
     const outputDir = options.output || this.config.defaultOutputDir;
     const verbose = options.verbose || false;
+    const index = options.index || 1;
 
-    logIfEnabled(LogLevel.INFO, verbose, `Downloading most recent stream for mint: ${mintId}`);
+    const indexDescription = index === 1 ? 'most recent stream' : `stream at index ${index}`;
+    logIfEnabled(LogLevel.INFO, verbose, `Downloading ${indexDescription} for mint: ${mintId}`);
     logIfEnabled(LogLevel.INFO, verbose, `Output directory: ${outputDir}`);
 
-    // Always download the most recent stream
-    const downloadResult = await this.downloadMostRecentStream(mintId, outputDir, options);
+    // Download the stream at the specified index
+    const downloadResult = await this.downloadStream(mintId, outputDir, options);
 
     return { downloadResult };
   }
