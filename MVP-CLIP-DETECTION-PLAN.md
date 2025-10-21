@@ -193,7 +193,6 @@ Return ONLY a JSON object with this exact structure:
 - No additional text or explanations - ONLY the JSON response
 
 Be authentic - only suggest clips that genuinely deserve to be shared. Use splicing when it makes the clip more compelling."
-```
 
 #### Step 3: CLI Integration (1 day)
 ```bash
@@ -219,8 +218,7 @@ node dist/index.js [mint_id] --skip-clips
 ```
 src/
 ├── services/
-│   ├── openrouter.service.ts    # NEW with chunking logic
-│   └── whisper.service.ts       # EXISTING
+│   └── openrouter.service.ts    # NEW with chunking logic
 ├── types/
 │   └── clip-detection.ts        # NEW
 ├── utils/
@@ -232,7 +230,7 @@ src/
 ```bash
 # .env (required for all stream processing)
 OPENROUTER_API_KEY=your_key_here
-# Note: Clip detection is automatic, no enable flag needed
+OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
 ```
 
 ### 8. Expected Output
