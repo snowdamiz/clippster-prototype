@@ -46,7 +46,7 @@ export class DownloadManager {
     mintId: string,
     downloadType: DownloadType
   ): string {
-    const streamId = stream.clipId || stream.clip_id || stream.id || 'stream';
+    const streamId = (stream.clipId || stream.clip_id || stream.id || 'stream').replace(/[:/\\?*|"<>]/g, '-');
     const mintPrefix = mintId.slice(0, 8);
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
     return `${downloadType}_${mintPrefix}_${streamId}_${timestamp}.mp4`;
@@ -85,7 +85,7 @@ export class DownloadManager {
     mintId: string,
     outputDir: string,
     options: CLIOptions
-  ): Promise<{ success: boolean; file?: string; error?: string }> {
+  ): Promise<{ success: boolean; file?: string; audioFile?: string; error?: string }> {
     const verbose = options.verbose || false;
 
     logIfEnabled(LogLevel.INFO, verbose, 'Starting download of most recent stream');
@@ -126,7 +126,21 @@ export class DownloadManager {
       }
 
       logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully downloaded: ${outputPath}`);
-      return { success: true, file: outputPath };
+
+      // Separate audio from the downloaded video
+      logIfEnabled(LogLevel.INFO, verbose, `🔄 Separating audio from video...`);
+      try {
+        const separatedFiles = await this.pumpFunService.separateAudio(outputPath, verbose);
+        logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully separated audio:`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📹 Video-only: ${separatedFiles.videoOnlyPath}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
+        return { success: true, file: separatedFiles.videoOnlyPath, audioFile: separatedFiles.audioOnlyPath };
+      } catch (separationError) {
+        const errorMessage = separationError instanceof Error ? separationError.message : 'Unknown separation error';
+        logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to separate audio', separationError);
+        // Return the original video file if separation fails
+        return { success: true, file: outputPath, error: `Download succeeded but audio separation failed: ${errorMessage}` };
+      }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -142,7 +156,7 @@ export class DownloadManager {
    * @returns Promise resolving to download results
    */
   async processDownloads(mintId: string, options: CLIOptions): Promise<{
-    downloadResult: { success: boolean; file?: string; error?: string };
+    downloadResult: { success: boolean; file?: string; audioFile?: string; error?: string };
   }> {
     const outputDir = options.output || this.config.defaultOutputDir;
     const verbose = options.verbose || false;

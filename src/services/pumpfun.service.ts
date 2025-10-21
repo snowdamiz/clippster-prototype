@@ -173,6 +173,134 @@ export class PumpFunService {
   }
 
   /**
+   * Separates audio from a video file, creating video-only and audio-only files
+   * @param inputPath Path to the input video file
+   * @param verbose Whether to enable verbose logging
+   * @returns Promise resolving to paths of the created files
+   */
+  async separateAudio(inputPath: string, verbose: boolean = false): Promise<{
+    videoOnlyPath: string;
+    audioOnlyPath: string;
+  }> {
+    logIfEnabled(LogLevel.DEBUG, verbose, `Separating audio from: ${inputPath}`);
+
+    const parsedPath = path.parse(inputPath);
+    const videoOnlyPath = path.join(parsedPath.dir, `${parsedPath.name}_video_only${parsedPath.ext}`);
+    const audioOnlyPath = path.join(parsedPath.dir, `${parsedPath.name}_audio_only.mp3`);
+
+    return new Promise((resolve, reject) => {
+      // First, create video-only file
+      const videoArgs: string[] = [
+        '-i', inputPath,
+        '-c:v', 'copy',
+        '-an', // No audio
+        '-y', // Overwrite output file
+        videoOnlyPath
+      ];
+
+      if (verbose) {
+        videoArgs.push('-v', 'info');
+      } else {
+        videoArgs.push('-v', 'error');
+      }
+
+      logIfEnabled(LogLevel.DEBUG, verbose, `Creating video-only file: ffmpeg ${videoArgs.join(' ')}`);
+
+      const videoFfmpeg = spawn('ffmpeg', videoArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
+
+      let videoStderr = '';
+
+      if (videoFfmpeg.stderr) {
+        videoFfmpeg.stderr.on('data', (data: any) => {
+          const output = data.toString();
+          videoStderr += output;
+          if (verbose) {
+            process.stdout.write(output);
+          }
+        });
+      }
+
+      videoFfmpeg.on('close', (videoCode: any) => {
+        if (videoCode !== 0) {
+          const error = new Error(`FFmpeg video process exited with code ${videoCode}`);
+          logIfEnabled(LogLevel.ERROR, verbose, 'FFmpeg video processing failed', { code: videoCode, stderr: videoStderr });
+          reject(error);
+          return;
+        }
+
+        logIfEnabled(LogLevel.DEBUG, verbose, 'Successfully created video-only file');
+
+        // Now create audio-only file
+        const audioArgs: string[] = [
+          '-i', inputPath,
+          '-c:a', 'mp3',
+          '-b:a', '128k',
+          '-vn', // No video
+          '-y', // Overwrite output file
+          audioOnlyPath
+        ];
+
+        if (verbose) {
+          audioArgs.push('-v', 'info');
+        } else {
+          audioArgs.push('-v', 'error');
+        }
+
+        logIfEnabled(LogLevel.DEBUG, verbose, `Creating audio-only file: ffmpeg ${audioArgs.join(' ')}`);
+
+        const audioFfmpeg = spawn('ffmpeg', audioArgs, { stdio: ['pipe', 'pipe', 'pipe'] });
+
+        let audioStderr = '';
+
+        if (audioFfmpeg.stderr) {
+          audioFfmpeg.stderr.on('data', (data: any) => {
+            const output = data.toString();
+            audioStderr += output;
+            if (verbose) {
+              process.stdout.write(output);
+            }
+          });
+        }
+
+        audioFfmpeg.on('close', (audioCode: any) => {
+          if (audioCode !== 0) {
+            const error = new Error(`FFmpeg audio process exited with code ${audioCode}`);
+            logIfEnabled(LogLevel.ERROR, verbose, 'FFmpeg audio processing failed', { code: audioCode, stderr: audioStderr });
+            reject(error);
+            return;
+          }
+
+          logIfEnabled(LogLevel.DEBUG, verbose, 'Successfully created audio-only file');
+
+          // Remove the original file
+          fs.unlink(inputPath, (err) => {
+            if (err) {
+              logIfEnabled(LogLevel.WARN, verbose, 'Warning: Could not remove original file', err);
+            } else {
+              logIfEnabled(LogLevel.DEBUG, verbose, 'Removed original file');
+            }
+          });
+
+          resolve({
+            videoOnlyPath,
+            audioOnlyPath
+          });
+        });
+
+        audioFfmpeg.on('error', (error: any) => {
+          logIfEnabled(LogLevel.ERROR, verbose, 'FFmpeg audio spawn error', error);
+          reject(error);
+        });
+      });
+
+      videoFfmpeg.on('error', (error: any) => {
+        logIfEnabled(LogLevel.ERROR, verbose, 'FFmpeg video spawn error', error);
+        reject(error);
+      });
+    });
+  }
+
+  /**
    * Gets a summary of available streams for a mint ID
    * @param mintId The SPL mint ID
    * @param verbose Whether to enable verbose logging

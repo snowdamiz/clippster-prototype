@@ -69,12 +69,18 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
       const results = await downloadManager.processDownloads(mintId, options);
 
       // Show download summary
-      const { success, file, error } = results.downloadResult;
+      const { success, file, audioFile, error } = results.downloadResult;
       console.log(`\n📊 Download Summary:`);
 
       if (success && file) {
-        console.log(`  ✅ Successfully downloaded stream`);
-        console.log(`  📁 File: ${file}`);
+        console.log(`  ✅ Successfully downloaded and processed stream`);
+        console.log(`  📹 Video-only: ${file}`);
+        if (audioFile) {
+          console.log(`  🎵 Audio-only: ${audioFile}`);
+        }
+        if (error) {
+          console.log(`  ⚠️  Warning: ${error}`);
+        }
       } else {
         console.log(`  ❌ Download failed: ${error}`);
       }
