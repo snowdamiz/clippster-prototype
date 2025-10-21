@@ -225,28 +225,6 @@ export class WhisperService {
   }
 
   /**
-   * Saves transcription to a JSON file
-   * @param transcription The transcription result
-   * @param outputPath Path where to save the transcription JSON
-   * @param verbose Whether to enable verbose logging
-   */
-  async saveTranscription(
-    transcription: VerboseJsonTranscription,
-    outputPath: string,
-    verbose: boolean = false
-  ): Promise<void> {
-    try {
-      const jsonData = JSON.stringify(transcription, null, 2);
-      fs.writeFileSync(outputPath, jsonData, 'utf8');
-
-      logIfEnabled(LogLevel.INFO, verbose, `✅ Saved transcription to: ${outputPath}`);
-    } catch (error) {
-      logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to save transcription', error);
-      throw error;
-    }
-  }
-
-  /**
    * Generates a clean text transcript from verbose JSON
    * @param transcription The verbose JSON transcription result
    * @param includeTimestamps Whether to include timestamps
@@ -277,30 +255,6 @@ export class WhisperService {
     }
 
     return transcript;
-  }
-
-  /**
-   * Saves a formatted text transcript
-   * @param transcription The verbose JSON transcription result
-   * @param outputPath Path where to save the text transcript
-   * @param includeTimestamps Whether to include timestamps
-   * @param verbose Whether to enable verbose logging
-   */
-  async saveTextTranscript(
-    transcription: VerboseJsonTranscription,
-    outputPath: string,
-    includeTimestamps: boolean = true,
-    verbose: boolean = false
-  ): Promise<void> {
-    try {
-      const textTranscript = this.generateTextTranscript(transcription, includeTimestamps);
-      fs.writeFileSync(outputPath, textTranscript, 'utf8');
-
-      logIfEnabled(LogLevel.INFO, verbose, `✅ Saved text transcript to: ${outputPath}`);
-    } catch (error) {
-      logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to save text transcript', error);
-      throw error;
-    }
   }
 
   /**
