@@ -12,6 +12,7 @@ export interface SubClip {
 export interface DetectedClip {
   id: string;
   title: string;
+  filename: string; // Descriptive filename for the clip
   type: 'continuous' | 'spliced'; // Single segment vs multiple spliced segments
   segments: SubClip[]; // Array of segments that make up this clip
   total_duration: number; // Sum of all segment durations

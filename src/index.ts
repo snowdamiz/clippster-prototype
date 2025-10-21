@@ -139,6 +139,11 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
                 value: `${topClip.title} (${topClip.virality_score}/100)`,
                 emoji: '🏆'
               });
+              summaryItems.push({
+                label: 'Top clip file',
+                value: topClip.filename,
+                emoji: '📁'
+              });
             }
           }
 

@@ -253,6 +253,7 @@ export class OpenRouterService {
           clips.push({
             id: clip.id || `${chunk.id}_clip_${index + 1}`,
             title: clip.title || 'Untitled Clip',
+            filename: clip.filename || this.generateDefaultFilename(clip.title || 'Untitled Clip', index + 1),
             type: clip.type || 'continuous',
             segments: clip.segments || [],
             total_duration: clip.total_duration || 0,
@@ -313,6 +314,7 @@ Return ONLY a JSON object with this exact structure:
     {
       "id": "clip_1",
       "title": "Catchy title for continuous clip",
+      "filename": "epic_rage_quit_losing_10_eth.mp4",
       "type": "continuous",
       "segments": [
         {
@@ -330,6 +332,7 @@ Return ONLY a JSON object with this exact structure:
     {
       "id": "clip_2",
       "title": "Catchy title for spliced clip",
+      "filename": "perfect_market_call_100x_prediction.mp4",
       "type": "spliced",
       "segments": [
         {
@@ -362,7 +365,15 @@ Return ONLY a JSON object with this exact structure:
 - total_duration = sum of all segment durations
 - combined_transcript = all segments concatenated with proper spacing
 - virality_score: 0-100 (be honest about actual viral potential)
+- filename: descriptive, lowercase, spaces replaced with underscores, ends with .mp4
 - No additional text or explanations - ONLY the JSON response
+
+**Filename Guidelines:**
+- Make filenames descriptive and engaging (2-6 words)
+- Use lowercase letters, numbers, and underscores only
+- Include the key emotion/event/action
+- End with .mp4 extension
+- Examples: "epic_rage_quit_losing_10_eth.mp4", "perfect_market_call_100x_prediction.mp4", "hilarious_reaction_to_price_crash.mp4"
 
 Be authentic - only suggest clips that genuinely deserve to be shared. Use splicing when it makes the clip more compelling.`;
   }
@@ -436,5 +447,22 @@ Be authentic - only suggest clips that genuinely deserve to be shared. Use splic
     const remainingSeconds = Math.floor(seconds % 60);
 
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  /**
+   * Generates a default filename if AI doesn't provide one
+   * @param title The clip title
+   * @param index The clip index
+   * @returns Generated filename
+   */
+  private generateDefaultFilename(title: string, index: number): string {
+    // Clean up the title: lowercase, replace special chars with underscores
+    const cleaned = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 50); // Limit length
+
+    return `${cleaned}_clip_${index}.mp4`;
   }
 }
