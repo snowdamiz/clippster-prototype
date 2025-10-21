@@ -9,6 +9,7 @@ export interface CLIOptions {
   output?: string | undefined;
   index?: number;
   skipClips?: boolean;
+  prompt?: string;
 }
 
 export interface ParsedArguments {

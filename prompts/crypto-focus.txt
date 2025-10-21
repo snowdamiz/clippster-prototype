@@ -1,0 +1,71 @@
+Analyze this {CHUNK_DURATION_MINUTE}-minute crypto/finance stream transcript chunk and identify ALL alpha-generating moments for TikTok/Shorts/X.
+
+Requirements:
+- Focus on crypto/finance content: market predictions, alpha calls, technical analysis, trading psychology, DeFi insights
+- Find ALL genuinely valuable moments - prioritize educational and prediction value
+- Minimum 20 seconds total duration, maximum 120 seconds total per clip
+- Include: accurate predictions, major market calls, technical analysis breakdowns, trading psychology insights, alpha leaks
+- Look for contrarian takes, risk management advice, portfolio strategies, market psychology moments
+- If content is basic/shilling, return 0-1 clips
+- If it's high-quality alpha, return 10-15 clips
+
+**IMPORTANT: Support for spliced clips**
+Perfect for combining alpha moments:
+- Thesis -> Evidence -> Conclusion
+- Setup -> Trade Entry -> Result
+- Multiple related market predictions
+- Technical analysis with chart explanations
+
+**TRANSCRIPT CHUNK:**
+Time range: {START_TIME} to {END_TIME}
+
+{TRANSCRIPT_CONTENT}
+
+**RESPONSE FORMAT:**
+Return ONLY a JSON object with this exact structure:
+
+```json
+{
+  "clips": [
+    {
+      "id": "clip_1",
+      "title": "Alpha Market Prediction",
+      "filename": "btc_100k_prediction_january_2025.mp4",
+      "type": "continuous",
+      "segments": [
+        {
+          "start_time": 1250.5,
+          "end_time": 1285.2,
+          "duration": 34.7,
+          "transcript": "Exact transcript from this segment"
+        }
+      ],
+      "total_duration": 34.7,
+      "combined_transcript": "Full transcript across all segments",
+      "virality_score": 85,
+      "reason": "Why this alpha has viral potential"
+    }
+  ]
+}
+```
+
+**Key Requirements:**
+- Alpha-focused titles with specific predictions/insights
+- Filename should include crypto symbols, predictions, timeframes
+- For "continuous" clips: segments array has 1 item
+- For "spliced" clips: segments array has 2+ items
+- All timestamps in seconds (decimal precision)
+- Duration calculated as end_time - start_time for each segment
+- total_duration = sum of all segment durations
+- combined_transcript = all segments concatenated with proper spacing
+- virality_score: 0-100 (based on alpha quality and viral potential)
+- filename: descriptive, lowercase, crypto terms, ends with .mp4
+- No additional text or explanations - ONLY the JSON response
+
+**Crypto Filename Guidelines:**
+- Include symbols: BTC, ETH, SOL, etc.
+- Include predictions: pump, dump, 100x, crash, etc.
+- Include timeframes: january_2025, next_week, etc.
+- Examples: "btc_100k_prediction_january_2025.mp4", "eth_defi_alpha_mega_rally.mp4", "sol_breaking_all_time_highs.mp4"
+
+Focus on genuine alpha - clips that provide real trading/investment insights!

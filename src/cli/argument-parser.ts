@@ -75,6 +75,21 @@ export function parseArguments(args: string[]): ParsedArguments {
         options.skipClips = true;
         break;
 
+      case '--prompt':
+        if (i + 1 < args.length) {
+          const promptName = args[++i];
+          if (promptName) {
+            options.prompt = promptName;
+          } else {
+            console.error('Error: --prompt requires a prompt name');
+            process.exit(1);
+          }
+        } else {
+          console.error('Error: --prompt requires a prompt name');
+          process.exit(1);
+        }
+        break;
+
       default:
         if (arg.startsWith('-')) {
           console.warn(`Warning: Unknown option ${arg}`);
@@ -104,6 +119,7 @@ Options:
   --output <dir>       Output directory for downloads (default: ./downloads)
   --index <number>     Download stream at index (1=newest, 2=second newest, etc.)
   --skip-clips         Skip AI clip detection (clip detection runs automatically by default)
+  --prompt <name>      Use specific prompt for clip detection (default: 'default')
 
 Arguments:
   spl_mint_id          The SPL mint ID to download from (base58 string, typically 43-44 characters)
@@ -121,7 +137,8 @@ Examples:
   clippster --output ./videos 11111111111111111111111111111112
   clippster --index 2 11111111111111111111111111111112
   clippster --skip-clips 11111111111111111111111111111112
-  clippster --index 5 -V 11111111111111111111111111111112
+  clippster --prompt gaming-focus 11111111111111111111111111111112
+  clippster --prompt crypto-focus --index 5 -V 11111111111111111111111111111112
   clippster --help
 `;
 }

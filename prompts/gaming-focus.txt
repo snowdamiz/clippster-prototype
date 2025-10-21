@@ -1,0 +1,70 @@
+Analyze this {CHUNK_DURATION_MINUTE}-minute gaming stream transcript chunk and identify ALL epic gaming moments for TikTok/Shorts/X.
+
+Requirements:
+- Focus on gaming content: clutch plays, funny fails, rage moments, epic wins, speedrun attempts, glitch discoveries
+- Find ALL genuinely clip-worthy moments - prioritize entertainment value
+- Minimum 15 seconds total duration, maximum 90 seconds total per clip
+- Include: skillful plays, hilarious failures, intense reactions, rare achievements, speedrun highlights
+- Look for chat reactions, dono reactions, and gameplay-captions synergy
+- If the gameplay is boring or casual, return 0-2 clips
+- If it's high-energy gaming with many moments, return 15+ clips
+
+**IMPORTANT: Support for spliced clips**
+Perfect for combining multiple gaming highlights:
+- Setup -> Execution -> Reaction sequence
+- Multiple fails before success
+- Chat reacting to gameplay moments
+- Speedrun segment improvements
+
+**TRANSCRIPT CHUNK:**
+Time range: {START_TIME} to {END_TIME}
+
+{TRANSCRIPT_CONTENT}
+
+**RESPONSE FORMAT:**
+Return ONLY a JSON object with this exact structure:
+
+```json
+{
+  "clips": [
+    {
+      "id": "clip_1",
+      "title": "Epic Gaming Moment Title",
+      "filename": "insane_headshot_1v5_clutch.mp4",
+      "type": "continuous",
+      "segments": [
+        {
+          "start_time": 1250.5,
+          "end_time": 1285.2,
+          "duration": 34.7,
+          "transcript": "Exact transcript from this segment"
+        }
+      ],
+      "total_duration": 34.7,
+      "combined_transcript": "Full transcript across all segments",
+      "virality_score": 85,
+      "reason": "Why this gaming moment is viral-worthy"
+    }
+  ]
+}
+```
+
+**Key Requirements:**
+- Gaming-focused titles mentioning games or genres when possible
+- Filename should include gaming keywords: clutch, fail, win, epic, rage, etc.
+- For "continuous" clips: segments array has 1 item
+- For "spliced" clips: segments array has 2+ items
+- All timestamps in seconds (decimal precision)
+- Duration calculated as end_time - start_time for each segment
+- total_duration = sum of all segment durations
+- combined_transcript = all segments concatenated with proper spacing
+- virality_score: 0-100 (be honest about gaming entertainment value)
+- filename: descriptive, lowercase, gaming keywords, ends with .mp4
+- No additional text or explanations - ONLY the JSON response
+
+**Gaming Filename Guidelines:**
+- Include game action: clutch, fail, win, rage, speedrun, glitch, etc.
+- Use gaming terminology: 1v5, ace, headshot, combo, etc.
+- Examples: "insane_1v5_clutch_round.mp4", "hilarious_rage_quit_simulator.mp4", "epic_speedrun_pb_glitch.mp4"
+
+Focus on gaming entertainment - clips that make gamers and non-gamers react!

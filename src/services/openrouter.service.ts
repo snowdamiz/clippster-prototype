@@ -13,16 +13,19 @@ import {
 import { VerboseJsonTranscription } from './whisper.service';
 import { LogLevel } from '../types';
 import { logIfEnabled } from '../utils/validators';
+import { PromptLoader, PromptVariables } from '../utils/prompt-loader';
 
 export class OpenRouterService {
   private apiKey: string;
   private model: string;
   private baseUrl: string;
+  private promptLoader: PromptLoader;
 
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY || '';
     this.model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
+    this.promptLoader = new PromptLoader();
 
     if (!this.apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is required');
@@ -32,19 +35,42 @@ export class OpenRouterService {
   /**
    * Analyzes a long transcript by breaking it into chunks and processing each chunk
    * @param transcript The verbose JSON transcription from Whisper
+   * @param promptName The name of the prompt to use (default: 'default')
    * @param verbose Whether to enable verbose logging
    * @param onProgress Optional progress callback
    * @returns Promise resolving to clip detection response
    */
   async analyzeLongTranscript(
     transcript: VerboseJsonTranscription,
+    promptName: string = 'default',
     verbose: boolean = false,
     onProgress?: (progress: ClipAnalysisProgress) => void
   ): Promise<ClipDetectionResponse> {
     logIfEnabled(LogLevel.INFO, verbose, '🧠 Starting AI clip detection analysis', {
       duration: transcript.duration,
       wordCount: transcript.words.length,
-      model: this.model
+      model: this.model,
+      promptName
+    });
+
+    // Load and validate the prompt
+    await this.promptLoader.loadPrompts(verbose);
+    const promptTemplate = this.promptLoader.getPrompt(promptName);
+
+    if (!promptTemplate) {
+      const availablePrompts = this.promptLoader.getAvailablePrompts();
+      throw new Error(`Prompt '${promptName}' not found. Available prompts: ${availablePrompts.join(', ')}`);
+    }
+
+    // Validate the prompt template
+    const missingVariables = this.promptLoader.validatePrompt(promptTemplate);
+    if (missingVariables.length > 0) {
+      throw new Error(`Prompt '${promptName}' is missing required variables: ${missingVariables.join(', ')}`);
+    }
+
+    logIfEnabled(LogLevel.INFO, verbose, `✅ Using prompt: ${promptName}`, {
+      description: promptTemplate.description || 'No description',
+      filePath: promptTemplate.filePath
     });
 
     const chunks = this.createChunks(transcript);
@@ -68,7 +94,7 @@ export class OpenRouterService {
       });
 
       try {
-        const chunkResult = await this.analyzeChunk(chunk, verbose);
+        const chunkResult = await this.analyzeChunk(chunk, promptTemplate, verbose);
         allClips.push(...chunkResult.clips);
 
         logIfEnabled(LogLevel.INFO, verbose, `✅ Chunk ${i + 1} completed`, {
@@ -183,11 +209,23 @@ export class OpenRouterService {
   /**
    * Analyzes a single chunk of transcript using AI
    * @param chunk The chunk to analyze
+   * @param promptTemplate The prompt template to use
    * @param verbose Whether to enable verbose logging
    * @returns Promise resolving to partial clip detection response
    */
-  private async analyzeChunk(chunk: Chunk, verbose: boolean = false): Promise<{ clips: DetectedClip[] }> {
-    const prompt = this.buildPrompt(chunk);
+  private async analyzeChunk(
+    chunk: Chunk,
+    promptTemplate: any,
+    verbose: boolean = false
+  ): Promise<{ clips: DetectedClip[] }> {
+    const variables: PromptVariables = {
+      CHUNK_DURATION_MINUTE: Math.round((chunk.end_time - chunk.start_time) / 60).toString(),
+      START_TIME: this.formatTime(chunk.start_time),
+      END_TIME: this.formatTime(chunk.end_time),
+      TRANSCRIPT_CONTENT: chunk.content
+    };
+
+    const prompt = this.promptLoader.renderPrompt(promptTemplate, variables);
 
     try {
       logIfEnabled(LogLevel.DEBUG, verbose, '📤 Sending request to OpenRouter API', {
@@ -278,106 +316,7 @@ export class OpenRouterService {
     }
   }
 
-  /**
-   * Builds the prompt for AI analysis
-   * @param chunk The transcript chunk to analyze
-   * @returns Formatted prompt string
-   */
-  private buildPrompt(chunk: Chunk): string {
-    return `Analyze this ${Math.round((chunk.end_time - chunk.start_time) / 60)}-minute stream transcript chunk and identify ALL clip-worthy moments for TikTok/Shorts/X.
-
-Requirements:
-- Find ALL genuinely clip-worthy moments - quality over quantity
-- Minimum 30 seconds total duration, maximum 120 seconds total per clip
-- Include only moments with real viral potential: strong emotions, humor, insights, controversy, predictions, technical breakdowns, call-outs, celebrations, frustrations
-- Look for subtle moments too: facial reactions, voice changes, audience interactions
-- If the content is boring or low-quality, return 0-2 clips rather than forcing recommendations
-- If the content is amazing and packed with moments, return 20+ clips
-
-**IMPORTANT: Support for spliced clips**
-Some clips work better by combining multiple segments (removing boring parts between). For example:
-- A great reaction at 1:05:00, then boring talk, then the punchline at 1:07:30
-- Multiple funny moments from the same topic spread across 10 minutes
-- A technical explanation with parts that should be removed for clarity
-
-**TRANSCRIPT CHUNK:**
-Time range: ${this.formatTime(chunk.start_time)} to ${this.formatTime(chunk.end_time)}
-
-${chunk.content}
-
-**RESPONSE FORMAT:**
-Return ONLY a JSON object with this exact structure:
-
-\`\`\`json
-{
-  "clips": [
-    {
-      "id": "clip_1",
-      "title": "Catchy title for continuous clip",
-      "filename": "epic_rage_quit_losing_10_eth.mp4",
-      "type": "continuous",
-      "segments": [
-        {
-          "start_time": 1250.5,
-          "end_time": 1285.2,
-          "duration": 34.7,
-          "transcript": "Exact transcript from this segment"
-        }
-      ],
-      "total_duration": 34.7,
-      "combined_transcript": "Full transcript across all segments",
-      "virality_score": 85,
-      "reason": "Why this could go viral"
-    },
-    {
-      "id": "clip_2",
-      "title": "Catchy title for spliced clip",
-      "filename": "perfect_market_call_100x_prediction.mp4",
-      "type": "spliced",
-      "segments": [
-        {
-          "start_time": 14500.0,
-          "end_time": 14520.5,
-          "duration": 20.5,
-          "transcript": "First segment transcript"
-        },
-        {
-          "start_time": 14535.0,
-          "end_time": 14545.5,
-          "duration": 10.5,
-          "transcript": "Second segment transcript"
-        }
-      ],
-      "total_duration": 31.0,
-      "combined_transcript": "First segment transcript. Second segment transcript.",
-      "virality_score": 92,
-      "reason": "Why this spliced clip could go viral"
-    }
-  ]
-}
-\`\`\`
-
-**Key Requirements:**
-- For "continuous" clips: segments array has 1 item
-- For "spliced" clips: segments array has 2+ items
-- All timestamps in seconds (decimal precision)
-- Duration calculated as end_time - start_time for each segment
-- total_duration = sum of all segment durations
-- combined_transcript = all segments concatenated with proper spacing
-- virality_score: 0-100 (be honest about actual viral potential)
-- filename: descriptive, lowercase, spaces replaced with underscores, ends with .mp4
-- No additional text or explanations - ONLY the JSON response
-
-**Filename Guidelines:**
-- Make filenames descriptive and engaging (2-6 words)
-- Use lowercase letters, numbers, and underscores only
-- Include the key emotion/event/action
-- End with .mp4 extension
-- Examples: "epic_rage_quit_losing_10_eth.mp4", "perfect_market_call_100x_prediction.mp4", "hilarious_reaction_to_price_crash.mp4"
-
-Be authentic - only suggest clips that genuinely deserve to be shared. Use splicing when it makes the clip more compelling.`;
-  }
-
+  
   /**
    * Merges and deduplicates clips from multiple chunks
    * @param allClips All clips found across all chunks

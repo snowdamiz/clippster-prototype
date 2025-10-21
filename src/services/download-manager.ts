@@ -245,6 +245,7 @@ export class DownloadManager {
             try {
               clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
                 transcriptionResult.verbose,
+                options.prompt || 'default',
                 verbose,
                 (progress) => {
                   logger.showProgress(
