@@ -6,14 +6,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { StreamClip, CLIOptions, DownloadProgress, DownloadType, AppConfig, LogLevel } from '../types';
 import { PumpFunService } from './pumpfun.service';
+import { WhisperService } from './whisper.service';
 import { logIfEnabled } from '../utils/validators';
 
 export class DownloadManager {
   private pumpFunService: PumpFunService;
+  private whisperService: WhisperService;
   private config: AppConfig;
 
   constructor(config: Partial<AppConfig> = {}) {
     this.pumpFunService = new PumpFunService();
+    this.whisperService = new WhisperService();
     this.config = {
       defaultOutputDir: './downloads',
       defaultClipLimit: 20,
@@ -85,7 +88,13 @@ export class DownloadManager {
     mintId: string,
     outputDir: string,
     options: CLIOptions
-  ): Promise<{ success: boolean; file?: string; audioFile?: string; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    file?: string;
+    audioFile?: string;
+    transcription?: any;
+    error?: string
+  }> {
     const verbose = options.verbose || false;
     const index = options.index || 1;
 
@@ -138,7 +147,36 @@ export class DownloadManager {
         logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully separated audio:`);
         logIfEnabled(LogLevel.INFO, verbose, `  📹 Video-only: ${separatedFiles.videoOnlyPath}`);
         logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
-        return { success: true, file: separatedFiles.videoOnlyPath, audioFile: separatedFiles.audioOnlyPath };
+
+        // Transcribe the audio file
+        logIfEnabled(LogLevel.INFO, verbose, `🔄 Starting audio transcription...`);
+        try {
+          const transcriptionResult = await this.whisperService.transcribeAudio(separatedFiles.audioOnlyPath, {}, verbose);
+
+          logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully transcribed audio`);
+          logIfEnabled(LogLevel.INFO, verbose, `  📄 Duration: ${transcriptionResult.verbose.duration}s`);
+          logIfEnabled(LogLevel.INFO, verbose, `  🗣️  Language: ${transcriptionResult.verbose.language}`);
+          logIfEnabled(LogLevel.INFO, verbose, `  📝 Text length: ${transcriptionResult.verbose.text.length} characters`);
+          logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
+          logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
+
+          return {
+            success: true,
+            file: separatedFiles.videoOnlyPath,
+            audioFile: separatedFiles.audioOnlyPath,
+            transcription: transcriptionResult
+          };
+        } catch (transcriptionError) {
+          const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : 'Unknown transcription error';
+          logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to transcribe audio', transcriptionError);
+          // Return separated files even if transcription fails
+          return {
+            success: true,
+            file: separatedFiles.videoOnlyPath,
+            audioFile: separatedFiles.audioOnlyPath,
+            error: `Download and separation succeeded but transcription failed: ${errorMessage}`
+          };
+        }
       } catch (separationError) {
         const errorMessage = separationError instanceof Error ? separationError.message : 'Unknown separation error';
         logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to separate audio', separationError);
@@ -160,7 +198,13 @@ export class DownloadManager {
    * @returns Promise resolving to download results
    */
   async processDownloads(mintId: string, options: CLIOptions): Promise<{
-    downloadResult: { success: boolean; file?: string; audioFile?: string; error?: string };
+    downloadResult: {
+      success: boolean;
+      file?: string;
+      audioFile?: string;
+      transcription?: any;
+      error?: string;
+    };
   }> {
     const outputDir = options.output || this.config.defaultOutputDir;
     const verbose = options.verbose || false;

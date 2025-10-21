@@ -4,10 +4,14 @@
  * Clippster - A CLI tool for downloading stream clips using SPL mint IDs
  */
 
+import * as dotenv from 'dotenv';
 import { ParsedArguments, LogLevel } from './types';
 import { validateSplMintId, logIfEnabled } from './utils/validators';
 import { parseArguments, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
 import { DownloadManager } from './services/download-manager';
+
+// Load environment variables from .env file
+dotenv.config();
 
 /**
  * Validates SPL mint ID and shows appropriate error messages
@@ -18,8 +22,6 @@ import { DownloadManager } from './services/download-manager';
 function validateAndShowMintIdErrors(mintId: string, verbose: boolean = false): boolean {
   if (!validateSplMintId(mintId)) {
     console.error('Error: Invalid SPL mint ID format.');
-    console.log('SPL mint IDs should be base58 strings (32-44 characters, alphanumeric except 0, O, I, l).');
-    console.log('Example: EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
     return false;
   }
 
@@ -69,7 +71,7 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
       const results = await downloadManager.processDownloads(mintId, options);
 
       // Show download summary
-      const { success, file, audioFile, error } = results.downloadResult;
+      const { success, file, audioFile, transcription, error } = results.downloadResult;
       console.log(`\n📊 Download Summary:`);
 
       if (success && file) {
@@ -77,6 +79,15 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
         console.log(`  📹 Video-only: ${file}`);
         if (audioFile) {
           console.log(`  🎵 Audio-only: ${audioFile}`);
+        }
+        if (transcription) {
+          const verboseTranscription = transcription.verbose || transcription;
+          console.log(`  🎤 Transcription: ${verboseTranscription.text.length} characters (${verboseTranscription.duration}s)`);
+          console.log(`  📋 Language: ${verboseTranscription.language}`);
+          console.log(`  📊 Word count: ${verboseTranscription.words.length}`);
+          if (transcription.simple) {
+            console.log(`  💬 Conversation segments: ${transcription.simple.segments.length}`);
+          }
         }
         if (error) {
           console.log(`  ⚠️  Warning: ${error}`);
