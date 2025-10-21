@@ -82,3 +82,6 @@ logs
 
 # Build output
 dist/
+
+# Downloads folder
+downloads/
