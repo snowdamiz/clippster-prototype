@@ -31,6 +31,7 @@ export function parseArguments(args: string[]): ParsedArguments {
         break;
 
       case '--verbose':
+      case '-V':
         options.verbose = true;
         break;
 
@@ -95,7 +96,7 @@ A CLI tool for downloading streams from SPL mint IDs
 Options:
   -h, --help           Show this help message
   -v, --version        Show version number
-  --verbose            Enable verbose output
+  --verbose, -V        Enable verbose output
   --output <dir>       Output directory for downloads (default: ./downloads)
   --index <number>     Download stream at index (1=newest, 2=second newest, etc.)
 
@@ -104,10 +105,10 @@ Arguments:
 
 Examples:
   clippster 11111111111111111111111111111112
-  clippster --verbose EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+  clippster -V EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
   clippster --output ./videos 11111111111111111111111111111112
   clippster --index 2 11111111111111111111111111111112
-  clippster --index 5 --verbose 11111111111111111111111111111112
+  clippster --index 5 -V 11111111111111111111111111111112
   clippster --help
 `;
 }

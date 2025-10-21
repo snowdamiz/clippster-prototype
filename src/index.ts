@@ -4,7 +4,7 @@
  * Clippster - A CLI tool for downloading stream clips using SPL mint IDs
  */
 
-import { CLIOptions, ParsedArguments, LogLevel } from './types';
+import { ParsedArguments, LogLevel } from './types';
 import { validateSplMintId, logIfEnabled } from './utils/validators';
 import { parseArguments, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
 import { DownloadManager } from './services/download-manager';
@@ -51,13 +51,11 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
     if (!mintId) {
       console.error('Error: Mint ID is undefined');
       process.exit(1);
-      return;
     }
 
     // Validate the mint ID
     if (!validateAndShowMintIdErrors(mintId, !!options.verbose)) {
       process.exit(1);
-      return;
     }
 
     // Create download manager and process downloads
@@ -106,7 +104,6 @@ async function main(): Promise<void> {
     // Validate parsed arguments
     if (!validateParsedArguments(parsed, !!parsed.options.verbose)) {
       process.exit(1);
-      return;
     }
 
     // Process the arguments
