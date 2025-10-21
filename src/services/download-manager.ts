@@ -8,6 +8,7 @@ import { StreamClip, CLIOptions, DownloadProgress, DownloadType, AppConfig, LogL
 import { PumpFunService } from './pumpfun.service';
 import { WhisperService } from './whisper.service';
 import { logIfEnabled } from '../utils/validators';
+import { Logger } from '../utils/logger';
 
 export class DownloadManager {
   private pumpFunService: PumpFunService;
@@ -58,11 +59,13 @@ export class DownloadManager {
   /**
    * Creates a progress callback for download tracking
    * @param filename The filename being downloaded
-   * @param verbose Whether to show progress
+   * @param logger Logger instance for progress display
+   * @param verbose Whether to show verbose output
    * @returns Progress callback function
    */
   private createProgressCallback(
     filename: string,
+    logger: Logger,
     verbose: boolean = false
   ): (progress: number, currentTime?: number, totalTime?: number) => void {
     return (progress: number, currentTime?: number, totalTime?: number) => {
@@ -73,6 +76,9 @@ export class DownloadManager {
         process.stdout.write(
           `\rDownloading ${filename}: ${progress.toFixed(1)}%${timeInfo}`
         );
+      } else {
+        // Use the new logger progress bar
+        logger.showProgress(progress, 100, filename, currentTime, totalTime);
       }
     };
   }
@@ -82,12 +88,14 @@ export class DownloadManager {
    * @param mintId The SPL mint ID
    * @param outputDir Output directory for downloads
    * @param options CLI options
+   * @param logger Logger instance for progress display
    * @returns Promise resolving to download results
    */
   async downloadStream(
     mintId: string,
     outputDir: string,
-    options: CLIOptions
+    options: CLIOptions,
+    logger: Logger
   ): Promise<{
     success: boolean;
     file?: string;
@@ -102,57 +110,78 @@ export class DownloadManager {
     logIfEnabled(LogLevel.INFO, verbose, `Starting download of ${indexDescription}`);
 
     try {
+      // Show progress spinner while fetching stream info
+      let spinnerCount = 0;
+      const spinnerInterval = setInterval(() => {
+        logger.showSpinner('Fetching stream information...', spinnerCount++);
+      }, 100);
+
       // Get the stream at the specified index
       const stream = await this.pumpFunService.getStreamAtIndex(mintId, index, verbose);
+      clearInterval(spinnerInterval);
 
       if (!stream) {
         const error = index === 1
           ? 'No complete streams found for this mint ID'
           : `No stream found at index ${index} for this mint ID`;
-        logIfEnabled(LogLevel.INFO, verbose, error);
+        logger.error(error);
         return { success: false, error };
       }
 
       const streamId = stream.clipId || stream.clip_id || stream.id || 'unknown';
-      logIfEnabled(LogLevel.INFO, verbose, `Found ${indexDescription}: ${streamId}`);
+      const shortStreamId = streamId.length > 20 ? streamId.slice(0, 20) + '...' : streamId;
+      logger.success(`Found ${indexDescription}: ${shortStreamId}`);
 
       // Generate filename and ensure output directory exists
       const filename = this.generateFilename(stream, mintId, DownloadType.COMPLETE);
       const outputPath = path.join(outputDir, filename);
       this.ensureOutputDirectory(outputDir, verbose);
 
-      logIfEnabled(LogLevel.INFO, verbose, `Downloading stream to: ${filename}`);
+      logger.step(`Downloading stream`, 1, 3);
+
+      // Add a time-based fallback progress display
+      let progressShown = false;
+      const progressFallback = setInterval(() => {
+        if (!progressShown) {
+          // Show a generic downloading message if no progress callback fires
+          logger.showSpinner('Downloading stream...', Math.floor(Date.now() / 100) % 10);
+        }
+      }, 200);
 
       // Download the stream using FFmpeg
       await this.pumpFunService.downloadCompleteStream(
         stream,
         outputPath,
         {
-          onProgress: this.createProgressCallback(filename, verbose),
+          onProgress: (progress: number, currentTime?: number, totalTime?: number) => {
+            progressShown = true;
+            this.createProgressCallback(filename, logger, verbose)(progress, currentTime, totalTime);
+          },
           ffmpegPath: 'ffmpeg'
         },
         verbose
       );
 
-      if (verbose) {
-        console.log(); // New line after progress
-      }
+      clearInterval(progressFallback);
+      logger.completeProgress(`Download completed: ${filename}`);
 
       logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully downloaded: ${outputPath}`);
 
       // Separate audio from the downloaded video
-      logIfEnabled(LogLevel.INFO, verbose, `🔄 Separating audio from video...`);
+      logger.step(`Separating audio from video`, 2, 3);
       try {
         const separatedFiles = await this.pumpFunService.separateAudio(outputPath, verbose);
+        logger.success(`Audio separation completed`);
         logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully separated audio:`);
         logIfEnabled(LogLevel.INFO, verbose, `  📹 Video-only: ${separatedFiles.videoOnlyPath}`);
         logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
 
         // Transcribe the audio file
-        logIfEnabled(LogLevel.INFO, verbose, `🔄 Starting audio transcription...`);
+        logger.step(`Transcribing audio`, 3, 3);
         try {
           const transcriptionResult = await this.whisperService.transcribeAudio(separatedFiles.audioOnlyPath, {}, verbose);
 
+          logger.success(`Audio transcription completed`);
           logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully transcribed audio`);
           logIfEnabled(LogLevel.INFO, verbose, `  📄 Duration: ${transcriptionResult.verbose.duration}s`);
           logIfEnabled(LogLevel.INFO, verbose, `  🗣️  Language: ${transcriptionResult.verbose.language}`);
@@ -168,6 +197,7 @@ export class DownloadManager {
           };
         } catch (transcriptionError) {
           const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : 'Unknown transcription error';
+          logger.error(`Audio transcription failed: ${errorMessage}`);
           logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to transcribe audio', transcriptionError);
           // Return separated files even if transcription fails
           return {
@@ -179,6 +209,7 @@ export class DownloadManager {
         }
       } catch (separationError) {
         const errorMessage = separationError instanceof Error ? separationError.message : 'Unknown separation error';
+        logger.error(`Audio separation failed: ${errorMessage}`);
         logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to separate audio', separationError);
         // Return the original video file if separation fails
         return { success: true, file: outputPath, error: `Download succeeded but audio separation failed: ${errorMessage}` };
@@ -186,6 +217,7 @@ export class DownloadManager {
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Stream download failed: ${errorMessage}`);
       logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to download stream', error);
       return { success: false, error: errorMessage };
     }
@@ -195,9 +227,10 @@ export class DownloadManager {
    * Main download orchestration method - downloads stream at specified index (default: newest)
    * @param mintId The SPL mint ID
    * @param options CLI options
+   * @param logger Logger instance for progress display
    * @returns Promise resolving to download results
    */
-  async processDownloads(mintId: string, options: CLIOptions): Promise<{
+  async processDownloads(mintId: string, options: CLIOptions, logger: Logger): Promise<{
     downloadResult: {
       success: boolean;
       file?: string;
@@ -215,7 +248,7 @@ export class DownloadManager {
     logIfEnabled(LogLevel.INFO, verbose, `Output directory: ${outputDir}`);
 
     // Download the stream at the specified index
-    const downloadResult = await this.downloadStream(mintId, outputDir, options);
+    const downloadResult = await this.downloadStream(mintId, outputDir, options, logger);
 
     return { downloadResult };
   }

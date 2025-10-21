@@ -77,6 +77,7 @@ export class PumpFunService {
         '-c:a', 'aac',
         '-b:a', '128k',
         '-movflags', '+faststart',
+        '-progress', 'pipe:2', // Send progress to stderr
         '-y', // Overwrite output file
         outputPath
       ];
@@ -84,6 +85,7 @@ export class PumpFunService {
       if (verbose) {
         args.push('-v', 'info');
       } else {
+        // Use 'error' to suppress most FFmpeg output but still allow progress parsing
         args.push('-v', 'error');
       }
 
@@ -99,7 +101,7 @@ export class PumpFunService {
           const output = data.toString();
           stderr += output;
 
-          // Extract duration from FFmpeg output
+          // Extract duration from FFmpeg output (for regular verbose output)
           if (!duration) {
             const durationMatch = output.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
             if (durationMatch) {
@@ -108,14 +110,72 @@ export class PumpFunService {
             }
           }
 
-          // Extract current time for progress
-          if (duration && options.onProgress) {
-            const timeMatch = output.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
-            if (timeMatch) {
-              const [, hours, minutes, seconds] = timeMatch;
-              const currentTime = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
-              const progress = (currentTime / duration) * 100;
-              options.onProgress(progress, currentTime, duration);
+          // Parse progress output from -progress flag
+          const lines = output.split('\n');
+          for (const line of lines) {
+            // Extract duration from progress output
+            if (!duration && line.startsWith('total_size')) {
+              // Look for duration info in verbose output that might be mixed in
+              const durationMatch = line.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+              if (durationMatch) {
+                const [, hours, minutes, seconds] = durationMatch;
+                duration = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
+              }
+            }
+
+            // Extract current time from progress output
+            if (line.startsWith('out_time_ms=')) {
+              const currentTimeMs = parseInt(line.split('=')[1]);
+              if (options.onProgress && currentTimeMs > 0) {
+                const currentTime = currentTimeMs / 1000000; // Convert microseconds to seconds
+
+                // If we don't have duration yet, try to extract it from the progress info
+                if (!duration && line.includes('duration')) {
+                  const durationMatch = line.match(/duration=(\d+\.\d+)/);
+                  if (durationMatch) {
+                    duration = parseFloat(durationMatch[1]);
+                  }
+                }
+
+                // If still no duration, estimate it or use a fallback
+                if (!duration) {
+                  // Skip progress if we don't have duration
+                  continue;
+                }
+
+                const progress = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+                options.onProgress(progress, currentTime, duration);
+              }
+            }
+
+            // Alternative progress parsing
+            if (line.startsWith('out_time=')) {
+              const timeStr = line.split('=')[1];
+              const timeMatch = timeStr.match(/(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+              if (timeMatch && options.onProgress) {
+                const [, hours, minutes, seconds] = timeMatch;
+                const currentTime = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
+
+                // Try to get duration from other progress info
+                if (!duration) {
+                  // Estimate or skip
+                  continue;
+                }
+
+                const progress = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+                options.onProgress(progress, currentTime, duration);
+              }
+            }
+
+            // Extract current time for progress (legacy method for verbose mode)
+            if (duration && options.onProgress) {
+              const timeMatch = line.match(/time=(\d{2}):(\d{2}):(\d{2}\.\d{2})/);
+              if (timeMatch) {
+                const [, hours, minutes, seconds] = timeMatch;
+                const currentTime = parseInt(hours) * 3600 + parseInt(minutes) * 60 + parseFloat(seconds);
+                const progress = (currentTime / duration) * 100;
+                options.onProgress(progress, currentTime, duration);
+              }
             }
           }
 

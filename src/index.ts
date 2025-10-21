@@ -9,6 +9,7 @@ import { ParsedArguments, LogLevel } from './types';
 import { validateSplMintId, logIfEnabled } from './utils/validators';
 import { parseArguments, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
 import { DownloadManager } from './services/download-manager';
+import { logger, Logger } from './utils/logger';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -21,7 +22,7 @@ dotenv.config();
  */
 function validateAndShowMintIdErrors(mintId: string, verbose: boolean = false): boolean {
   if (!validateSplMintId(mintId)) {
-    console.error('Error: Invalid SPL mint ID format.');
+    logger.error('Invalid SPL mint ID format.');
     return false;
   }
 
@@ -35,6 +36,9 @@ function validateAndShowMintIdErrors(mintId: string, verbose: boolean = false): 
  */
 async function processCliArguments(parsed: ParsedArguments): Promise<void> {
   const { options, cliArguments } = parsed;
+
+  // Configure logger based on verbose flag
+  const appLogger = new Logger({ verbose: !!options.verbose });
 
   // Handle help and version flags first
   if (options.help) {
@@ -51,14 +55,19 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
   if (cliArguments.length > 0) {
     const mintId = cliArguments[0];
     if (!mintId) {
-      console.error('Error: Mint ID is undefined');
+      appLogger.error('Mint ID is undefined');
       process.exit(1);
     }
 
+    // Show startup information
+    appLogger.section('🎬 Clippster Stream Downloader');
+
     // Validate the mint ID
+    appLogger.step('Validating SPL mint ID');
     if (!validateAndShowMintIdErrors(mintId, !!options.verbose)) {
       process.exit(1);
     }
+    appLogger.success(`Mint ID validation passed: ${mintId.slice(0, 8)}...${mintId.slice(-4)}`);
 
     // Create download manager and process downloads
     const downloadManager = new DownloadManager();
@@ -66,38 +75,59 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
     try {
       const index = options.index || 1;
       const indexDescription = index === 1 ? 'most recent stream' : `stream at index ${index}`;
-      logIfEnabled(LogLevel.INFO, !!options.verbose, `Starting download of ${indexDescription}...`);
 
-      const results = await downloadManager.processDownloads(mintId, options);
+      appLogger.step(`Preparing to download ${indexDescription}`);
+
+      const results = await downloadManager.processDownloads(mintId, options, appLogger);
 
       // Show download summary
       const { success, file, audioFile, transcription, error } = results.downloadResult;
-      console.log(`\n📊 Download Summary:`);
 
       if (success && file) {
-        console.log(`  ✅ Successfully downloaded and processed ${indexDescription}`);
-        console.log(`  📹 Video-only: ${file}`);
+        const summaryItems = [
+          { label: 'Status', value: 'Download completed successfully', emoji: '✅' },
+          { label: 'Stream', value: indexDescription, emoji: '🎯' },
+          { label: 'Video file', value: file.split(/[/\\]/).pop() || file, emoji: '📹' },
+        ];
+
         if (audioFile) {
-          console.log(`  🎵 Audio-only: ${audioFile}`);
+          summaryItems.push({
+            label: 'Audio file',
+            value: audioFile.split(/[/\\]/).pop() || audioFile,
+            emoji: '🎵'
+          });
         }
+
         if (transcription) {
           const verboseTranscription = transcription.verbose || transcription;
-          console.log(`  🎤 Transcription: ${verboseTranscription.text.length} characters (${verboseTranscription.duration}s)`);
-          console.log(`  📋 Language: ${verboseTranscription.language}`);
-          console.log(`  📊 Word count: ${verboseTranscription.words.length}`);
+          summaryItems.push(
+            { label: 'Transcription', value: `${verboseTranscription.text.length} characters (${verboseTranscription.duration.toFixed(1)}s)`, emoji: '🎤' },
+            { label: 'Language', value: verboseTranscription.language, emoji: '🌍' },
+            { label: 'Word count', value: verboseTranscription.words.length.toString(), emoji: '📊' }
+          );
+
           if (transcription.simple) {
-            console.log(`  💬 Conversation segments: ${transcription.simple.segments.length}`);
+            summaryItems.push({
+              label: 'Conversation segments',
+              value: transcription.simple.segments.length.toString(),
+              emoji: '💬'
+            });
           }
         }
+
+        appLogger.showSummary('📊 Download Summary', summaryItems);
+
         if (error) {
-          console.log(`  ⚠️  Warning: ${error}`);
+          appLogger.warn(`Warning: ${error}`);
         }
       } else {
-        console.log(`  ❌ Download failed: ${error}`);
+        appLogger.error(`Download failed: ${error}`);
+        process.exit(1);
       }
 
     } catch (error) {
-      logIfEnabled(LogLevel.ERROR, !!options.verbose, 'Error processing stream', error);
+      appLogger.error('Error processing stream');
+      logIfEnabled(LogLevel.ERROR, !!options.verbose, 'Error details', error);
       process.exit(1);
     }
   }
@@ -121,15 +151,19 @@ async function main(): Promise<void> {
     await processCliArguments(parsed);
 
   } catch (error) {
-    console.error('An unexpected error occurred:', error);
-    process.exit(1);
-  }
+  const appLogger = new Logger();
+  appLogger.error('An unexpected error occurred');
+  console.error(error);
+  process.exit(1);
+}
 }
 
 // Run the application
 if (require.main === module) {
   main().catch(error => {
-    console.error('Fatal error:', error);
+    const appLogger = new Logger();
+    appLogger.error('Fatal error occurred');
+    console.error(error);
     process.exit(1);
   });
 }
