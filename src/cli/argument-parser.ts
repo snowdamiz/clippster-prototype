@@ -71,6 +71,10 @@ export function parseArguments(args: string[]): ParsedArguments {
         }
         break;
 
+      case '--skip-clips':
+        options.skipClips = true;
+        break;
+
       default:
         if (arg.startsWith('-')) {
           console.warn(`Warning: Unknown option ${arg}`);
@@ -91,7 +95,7 @@ export function generateHelpText(): string {
   return `
 Usage: clippster [options] <spl_mint_id>
 
-A CLI tool for downloading streams from SPL mint IDs
+A CLI tool for downloading streams from SPL mint IDs with AI-powered clip detection
 
 Options:
   -h, --help           Show this help message
@@ -99,15 +103,24 @@ Options:
   --verbose, -V        Enable verbose output
   --output <dir>       Output directory for downloads (default: ./downloads)
   --index <number>     Download stream at index (1=newest, 2=second newest, etc.)
+  --skip-clips         Skip AI clip detection (clip detection runs automatically by default)
 
 Arguments:
   spl_mint_id          The SPL mint ID to download from (base58 string, typically 43-44 characters)
+
+Features:
+  🎥 Video/Audio download with automatic transcoding
+  🎤 AI-powered transcription with word-level timestamps
+  🧠 Automatic clip detection for viral-worthy moments (TikTok/Shorts/X)
+  📊 Support for streams up to 8 hours with intelligent chunking
+  💾 JSON output with precise timestamps for video processing
 
 Examples:
   clippster 11111111111111111111111111111112
   clippster -V EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
   clippster --output ./videos 11111111111111111111111111111112
   clippster --index 2 11111111111111111111111111111112
+  clippster --skip-clips 11111111111111111111111111111112
   clippster --index 5 -V 11111111111111111111111111111112
   clippster --help
 `;

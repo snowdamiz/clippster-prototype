@@ -8,6 +8,7 @@ export interface CLIOptions {
   verbose?: boolean;
   output?: string | undefined;
   index?: number;
+  skipClips?: boolean;
 }
 
 export interface ParsedArguments {
@@ -57,3 +58,6 @@ export enum LogLevel {
   INFO = 'info',
   DEBUG = 'debug'
 }
+
+// Re-export clip detection types
+export * from './clip-detection';

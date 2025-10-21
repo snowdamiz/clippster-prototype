@@ -4,20 +4,23 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { StreamClip, CLIOptions, DownloadProgress, DownloadType, AppConfig, LogLevel } from '../types';
+import { StreamClip, CLIOptions, DownloadProgress, DownloadType, AppConfig, LogLevel, ClipDetectionResponse } from '../types';
 import { PumpFunService } from './pumpfun.service';
 import { WhisperService } from './whisper.service';
+import { OpenRouterService } from './openrouter.service';
 import { logIfEnabled } from '../utils/validators';
 import { Logger } from '../utils/logger';
 
 export class DownloadManager {
   private pumpFunService: PumpFunService;
   private whisperService: WhisperService;
+  private openRouterService: OpenRouterService;
   private config: AppConfig;
 
   constructor(config: Partial<AppConfig> = {}) {
     this.pumpFunService = new PumpFunService();
     this.whisperService = new WhisperService();
+    this.openRouterService = new OpenRouterService();
     this.config = {
       defaultOutputDir: './downloads',
       defaultClipLimit: 20,
@@ -54,6 +57,48 @@ export class DownloadManager {
     const mintPrefix = mintId.slice(0, 8);
     const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
     return `${downloadType}_${mintPrefix}_${streamId}_${timestamp}.mp4`;
+  }
+
+  /**
+   * Generates a filename for clip detection results
+   * @param mintId The mint ID
+   * @param streamId The stream ID
+   * @returns Generated filename for clips JSON
+   */
+  private generateClipsFilename(mintId: string, streamId: string): string {
+    const mintPrefix = mintId.slice(0, 8);
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-');
+    const safeStreamId = streamId.replace(/[:/\\?*|"<>]/g, '-');
+    return `clips_${mintPrefix}_${safeStreamId}_${timestamp}.json`;
+  }
+
+  /**
+   * Saves clip detection results to a JSON file
+   * @param clipDetection The clip detection results
+   * @param outputDir Output directory
+   * @param mintId The mint ID
+   * @param streamId The stream ID
+   * @param verbose Whether to log verbose output
+   * @returns Path to the saved file
+   */
+  private async saveClipDetectionResults(
+    clipDetection: ClipDetectionResponse,
+    outputDir: string,
+    mintId: string,
+    streamId: string,
+    verbose: boolean = false
+  ): Promise<string> {
+    const filename = this.generateClipsFilename(mintId, streamId);
+    const outputPath = path.join(outputDir, filename);
+
+    try {
+      await fs.promises.writeFile(outputPath, JSON.stringify(clipDetection, null, 2));
+      logIfEnabled(LogLevel.INFO, verbose, `✅ Saved clip detection results: ${outputPath}`);
+      return outputPath;
+    } catch (error) {
+      logIfEnabled(LogLevel.ERROR, verbose, `❌ Failed to save clip detection results`, error);
+      throw new Error(`Failed to save clip detection results: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -101,6 +146,8 @@ export class DownloadManager {
     file?: string;
     audioFile?: string;
     transcription?: any;
+    clipDetection?: ClipDetectionResponse;
+    clipsFile?: string;
     error?: string
   }> {
     const verbose = options.verbose || false;
@@ -177,7 +224,7 @@ export class DownloadManager {
         logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
 
         // Transcribe the audio file
-        logger.step(`Transcribing audio`, 3, 3);
+        logger.step(`Transcribing audio`, 3, 4);
         try {
           const transcriptionResult = await this.whisperService.transcribeAudio(separatedFiles.audioOnlyPath, {}, verbose);
 
@@ -189,11 +236,73 @@ export class DownloadManager {
           logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
           logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
 
+          // Perform AI clip detection unless explicitly skipped
+          let clipDetectionResults: ClipDetectionResponse | undefined;
+          let clipsFilePath: string | undefined;
+
+          if (!options.skipClips) {
+            logger.step(`Analyzing content for viral clips`, 4, 4);
+            try {
+              clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
+                transcriptionResult.verbose,
+                verbose,
+                (progress) => {
+                  logger.showProgress(
+                    progress.chunk,
+                    progress.total_chunks,
+                    `AI Analysis (Chunk ${progress.chunk}/${progress.total_chunks}, ${progress.clips_found} clips found)`
+                  );
+                }
+              );
+
+              logger.success(`AI clip detection completed`);
+              logIfEnabled(LogLevel.INFO, verbose, `🧠 Successfully analyzed content for viral clips`);
+              logIfEnabled(LogLevel.INFO, verbose, `  🎯 Total clips found: ${clipDetectionResults.total_clips_found}`);
+              logIfEnabled(LogLevel.INFO, verbose, `  📊 Chunks processed: ${clipDetectionResults.stream_info.chunks_processed}`);
+              logIfEnabled(LogLevel.INFO, verbose, `  ⏱️  Stream duration: ${Math.round(clipDetectionResults.stream_info.duration)}s`);
+
+              if (clipDetectionResults.clips.length > 0) {
+                const avgVirality = Math.round(
+                  clipDetectionResults.clips.reduce((sum, clip) => sum + clip.virality_score, 0) / clipDetectionResults.clips.length
+                );
+                logIfEnabled(LogLevel.INFO, verbose, `  📈 Average virality score: ${avgVirality}/100`);
+
+                // Show top 3 clips
+                const topClips = clipDetectionResults.clips.slice(0, 3);
+                logIfEnabled(LogLevel.INFO, verbose, `  🏆 Top clips:`);
+                topClips.forEach((clip, index) => {
+                  logIfEnabled(LogLevel.INFO, verbose, `    ${index + 1}. ${clip.title} (${clip.virality_score}/100)`);
+                });
+              } else {
+                logIfEnabled(LogLevel.INFO, verbose, `  🤷 No viral-worthy clips detected in this stream`);
+              }
+
+              // Save clip detection results to file
+              clipsFilePath = await this.saveClipDetectionResults(
+                clipDetectionResults,
+                outputDir,
+                mintId,
+                streamId,
+                verbose
+              );
+
+            } catch (clipDetectionError) {
+              const errorMessage = clipDetectionError instanceof Error ? clipDetectionError.message : 'Unknown clip detection error';
+              logger.error(`AI clip detection failed: ${errorMessage}`);
+              logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to analyze content for clips', clipDetectionError);
+              // Continue without clip detection - don't fail the entire process
+            }
+          } else {
+            logIfEnabled(LogLevel.INFO, verbose, `⏭️  Skipping AI clip detection as requested`);
+          }
+
           return {
             success: true,
             file: separatedFiles.videoOnlyPath,
             audioFile: separatedFiles.audioOnlyPath,
-            transcription: transcriptionResult
+            transcription: transcriptionResult,
+            ...(clipDetectionResults && { clipDetection: clipDetectionResults }),
+            ...(clipsFilePath && { clipsFile: clipsFilePath })
           };
         } catch (transcriptionError) {
           const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : 'Unknown transcription error';
@@ -236,6 +345,8 @@ export class DownloadManager {
       file?: string;
       audioFile?: string;
       transcription?: any;
+      clipDetection?: ClipDetectionResponse;
+      clipsFile?: string;
       error?: string;
     };
   }> {

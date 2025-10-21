@@ -81,7 +81,7 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
       const results = await downloadManager.processDownloads(mintId, options, appLogger);
 
       // Show download summary
-      const { success, file, audioFile, transcription, error } = results.downloadResult;
+      const { success, file, audioFile, transcription, clipDetection, clipsFile, error } = results.downloadResult;
 
       if (success && file) {
         const summaryItems = [
@@ -113,6 +113,54 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
               emoji: '💬'
             });
           }
+        }
+
+        // Add clip detection results
+        if (clipDetection) {
+          summaryItems.push(
+            { label: 'Clips found', value: `${clipDetection.total_clips_found} clips`, emoji: '🎬' },
+            { label: 'Chunks processed', value: clipDetection.stream_info.chunks_processed.toString(), emoji: '🧩' }
+          );
+
+          if (clipDetection.clips.length > 0) {
+            const avgVirality = Math.round(
+              clipDetection.clips.reduce((sum, clip) => sum + clip.virality_score, 0) / clipDetection.clips.length
+            );
+            summaryItems.push({
+              label: 'Avg virality score',
+              value: `${avgVirality}/100`,
+              emoji: '📈'
+            });
+
+            const topClip = clipDetection.clips[0];
+            if (topClip) {
+              summaryItems.push({
+                label: 'Top clip',
+                value: `${topClip.title} (${topClip.virality_score}/100)`,
+                emoji: '🏆'
+              });
+            }
+          }
+
+          if (clipsFile) {
+            summaryItems.push({
+              label: 'Clips file',
+              value: clipsFile.split(/[/\\]/).pop() || clipsFile,
+              emoji: '📄'
+            });
+          }
+        } else if (!options.skipClips) {
+          summaryItems.push({
+            label: 'Clip detection',
+            value: 'Failed or skipped',
+            emoji: '⚠️'
+          });
+        } else {
+          summaryItems.push({
+            label: 'Clip detection',
+            value: 'Skipped as requested',
+            emoji: '⏭️'
+          });
         }
 
         appLogger.showSummary('📊 Download Summary', summaryItems);
