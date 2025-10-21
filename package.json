@@ -30,5 +30,8 @@
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@120356aa/pumpfun-wrapper": "^1.0.0"
   }
 }

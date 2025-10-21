@@ -5,7 +5,13 @@
       "Bash(npx tsc:*)",
       "Bash(npm run build:*)",
       "Bash(npm run dev:*)",
-      "Bash(npm run cli:*)"
+      "Bash(npm run cli:*)",
+      "Bash(where ffmpeg)",
+      "Bash(where:*)",
+      "Bash(scoop install:*)",
+      "Bash(ffmpeg:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)"
     ],
     "deny": [],
     "ask": []
