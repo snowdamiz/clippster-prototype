@@ -330,8 +330,8 @@ export class FFmpegService {
     await this.ensureOutputDirectory(outputFile);
     await this.initialize(); // Ensure FFmpeg is initialized
 
-    const width = options.width || 1280;
-    const height = options.height || 720;
+    const width = options.width || 640;
+    const height = options.height || 360;
     const quality = options.quality || 2;
     const format = options.format || 'jpg';
 
@@ -339,10 +339,10 @@ export class FFmpegService {
       '-y',
       '-ss', timestamp.toString(),
       '-i', inputFile,
-      '-vframes', '1',
-      '-q:v', quality.toString(),
+      '-frames:v', '1',
+      '-q:v', Math.min(3, Math.max(1, 6 - quality)).toString(),
       '-s', `${width}x${height}`,
-      '-update', '1',
+      '-pix_fmt', 'yuvj420p',
       outputFile
     ];
 
