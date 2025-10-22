@@ -344,10 +344,20 @@ export class ClipConstructionService {
     duration: number,
     options: ClipConstructionOptions
   ): Promise<string> {
+    // Get the audio stream start offset from the video file
+    const streamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
+    const adjustedStartTime = startTime + streamOffset;
+    
+    logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Adjusting timestamp for HLS offset`, {
+      originalStart: startTime,
+      streamOffset,
+      adjustedStart: adjustedStartTime
+    });
+    
     return this.ffmpegService.extractClip({
       input: sourceVideoFile,
       output: outputPath,
-      startTime,
+      startTime: adjustedStartTime,
       duration,
       quality: options.quality || 'medium',
       format: options.format || 'mp4'
@@ -368,16 +378,44 @@ export class ClipConstructionService {
     segments: ClipSegment[],
     options: ClipConstructionOptions
   ): Promise<string> {
-    const segmentData = segments.map(segment => ({
-      input: sourceVideoFile,
-      start: segment.start_time,
-      duration: segment.duration
-    }));
+    // Get the audio stream start offset from the video file
+    const streamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
+    
+    const segmentData = segments.map(segment => {
+      const adjustedStart = segment.start_time + streamOffset;
+      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Adjusting segment timestamp`, {
+        originalStart: segment.start_time,
+        streamOffset,
+        adjustedStart
+      });
+      return {
+        input: sourceVideoFile,
+        start: adjustedStart,
+        duration: segment.duration
+      };
+    });
 
     return this.ffmpegService.spliceClips(segmentData, outputPath, {
       quality: options.quality || 'medium',
       format: options.format || 'mp4'
     });
+  }
+
+  /**
+   * Gets the audio stream start offset from the video file
+   * This is needed to adjust timestamps from audio transcription to video timeline
+   * @param videoFile Path to the video file
+   * @returns Audio stream start time in seconds
+   */
+  private async getAudioStreamStartOffset(videoFile: string): Promise<number> {
+    try {
+      const videoInfo = await this.ffmpegService.getVideoInfo(videoFile);
+      // Return the audio stream start time, defaulting to 0 if not available
+      return videoInfo.audioStart || 0;
+    } catch (error) {
+      // If we can't get the info, assume no offset
+      return 0;
+    }
   }
 
   /**

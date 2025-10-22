@@ -27,6 +27,7 @@ export interface ExtendedFFmpegOptions extends FFmpegOptions {
 export interface ExtendedVideoInfo extends VideoInfo {
   hasAudio: boolean;
   hasVideo: boolean;
+  audioStart?: number;
 }
 
 // Use the extended ThumbnailOptions that already has timestamp required
@@ -179,8 +180,9 @@ export class FFmpegService {
 
     const args = [
       '-y', // Overwrite output file
-      '-ss', (options.startTime || 0).toString(), // Start time
+      '-accurate_seek', // Enable accurate seeking
       '-i', options.input, // Input file
+      '-ss', (options.startTime || 0).toString(), // Start time (after input for accuracy)
       '-t', (options.duration || 0).toString(), // Duration
       '-c:v', options.codec || quality.codec, // Video codec
       '-preset', options.preset || quality.preset, // Encoding preset
@@ -451,6 +453,9 @@ export class FFmpegService {
 
       const videoStream = probeData.streams.find((stream: any) => stream.codec_type === 'video');
       const audioStream = probeData.streams.find((stream: any) => stream.codec_type === 'audio');
+      
+      // Get audio stream start time (important for HLS streams)
+      const audioStart = audioStream?.start_time ? parseFloat(audioStream.start_time) : 0;
 
       return {
         duration: parseFloat(probeData.format.duration) || 0,
@@ -461,7 +466,8 @@ export class FFmpegService {
         format: probeData.format.format_name || 'unknown',
         size: parseInt(probeData.format.size) || 0,
         hasAudio: !!audioStream,
-        hasVideo: !!videoStream
+        hasVideo: !!videoStream,
+        audioStart
       };
     } catch (error) {
       throw new Error(`Failed to get video info: ${error}`);
@@ -488,6 +494,9 @@ export class FFmpegService {
    * @returns Promise resolving to the output file path
    */
   async executeFFmpeg(args: string[]): Promise<string> {
+    // Log the full FFmpeg command for debugging
+    console.log(`[FFmpeg] Executing: ffmpeg ${args.join(' ')}`);
+    
     return new Promise((resolve, reject) => {
       const process = spawn(this.ffmpegPath, args, { windowsHide: true });
 

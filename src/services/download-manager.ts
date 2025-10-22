@@ -236,6 +236,16 @@ export class DownloadManager {
           logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
           logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
 
+          // Save transcription to file for debugging
+          const transcriptFilename = `transcript_${filename.replace('.mp4', '')}.json`;
+          const transcriptPath = path.join(outputDir, transcriptFilename);
+          try {
+            await fs.promises.writeFile(transcriptPath, JSON.stringify(transcriptionResult.verbose, null, 2));
+            logIfEnabled(LogLevel.INFO, verbose, `✅ Saved transcript: ${transcriptPath}`);
+          } catch (transcriptSaveError) {
+            logIfEnabled(LogLevel.WARN, verbose, `⚠️ Failed to save transcript file`, transcriptSaveError);
+          }
+
           // Perform AI clip detection unless explicitly skipped
           let clipDetectionResults: ClipDetectionResponse | undefined;
           let clipsFilePath: string | undefined;
