@@ -3,8 +3,10 @@
  */
 
 import * as readline from 'readline';
+import { LoggerOptions } from '../types';
 
-export interface LoggerOptions {
+// Extended LoggerOptions for the enhanced logger class
+export interface EnhancedLoggerOptions extends LoggerOptions {
   verbose?: boolean;
   enableProgress?: boolean;
 }
@@ -15,7 +17,11 @@ export class Logger {
   private currentProgressLine: string = '';
   private isProgressActive: boolean = false;
 
-  constructor(options: LoggerOptions = {}) {
+  constructor(options: EnhancedLoggerOptions = {
+    level: 'info',
+    enableColors: true,
+    enableTimestamp: true
+  }) {
     this.verbose = options.verbose || false;
     this.enableProgress = options.enableProgress !== false; // default to true
   }

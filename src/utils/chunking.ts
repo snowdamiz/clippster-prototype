@@ -3,14 +3,11 @@
  */
 
 import { VerboseJsonTranscription, Segment, Word } from '../services/whisper.service';
-import { Chunk } from '../types';
-import { LogLevel } from '../types';
+import { Chunk, ChunkingConfig, LogLevel } from '../types';
 import { logIfEnabled } from './validators';
 
-/**
- * Configuration for chunk creation
- */
-export interface ChunkingConfig {
+// Extended ChunkingConfig for specific functionality
+export interface ExtendedChunkingConfig extends ChunkingConfig {
   chunkDuration: number; // Maximum duration per chunk in seconds
   overlap: number; // Overlap between chunks in seconds
   minChunkDuration: number; // Minimum chunk duration in seconds
@@ -19,10 +16,13 @@ export interface ChunkingConfig {
 /**
  * Default chunking configuration optimized for 8-hour streams
  */
-export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
-  chunkDuration: 2 * 60 * 60, // 2 hours
+export const DEFAULT_CHUNKING_CONFIG: ExtendedChunkingConfig = {
+  chunkSize: 2 * 60 * 60, // 2 hours
   overlap: 15 * 60, // 15 minutes overlap
-  minChunkDuration: 30 * 60 // 30 minutes minimum
+  minChunkSize: 30 * 60, // 30 minutes minimum
+  maxChunkSize: 4 * 60 * 60, // 4 hours maximum
+  chunkDuration: 2 * 60 * 60, // Maximum duration per chunk in seconds
+  minChunkDuration: 30 * 60 // Minimum chunk duration in seconds
 };
 
 /**
@@ -281,9 +281,12 @@ export function analyzeOptimalChunking(transcript: VerboseJsonTranscription): Ch
   }
 
   return {
+    chunkSize: 0, // Not used in duration-based chunking
     chunkDuration,
     overlap,
-    minChunkDuration: Math.max(30 * 60, chunkDuration / 4) // 25% of chunk size minimum
+    minChunkSize: 0, // Not used in duration-based chunking
+    minChunkDuration: Math.max(30 * 60, chunkDuration / 4), // 25% of chunk size minimum
+    maxChunkSize: 0 // Not used in duration-based chunking
   };
 }
 

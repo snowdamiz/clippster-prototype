@@ -10,6 +10,17 @@ export interface CLIOptions {
   index?: number;
   skipClips?: boolean;
   prompt?: string;
+  // Clip construction options
+  generateClipsOnly?: boolean;
+  clipQuality?: 'high' | 'medium' | 'low';
+  clipFormat?: 'mp4' | 'mov' | 'webm';
+  maxClips?: number;
+  viralityThreshold?: number;
+  includeSubtitles?: boolean;
+  includeThumbnails?: boolean;
+  optimizeForPlatform?: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
+  autoCrop?: boolean;
+  maxConcurrentJobs?: number;
 }
 
 export interface ParsedArguments {
@@ -60,5 +71,11 @@ export enum LogLevel {
   DEBUG = 'debug'
 }
 
-// Re-export clip detection types
+// Re-export all type modules
 export * from './clip-detection';
+export * from './clip-construction';
+export * from './transcription';
+export * from './platform-optimization';
+export * from './integration';
+export * from './file-organization';
+export * from './utils';

@@ -9,6 +9,7 @@ import { ParsedArguments, LogLevel } from './types';
 import { validateSplMintId, logIfEnabled } from './utils/validators';
 import { parseArguments, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
 import { DownloadManager } from './services/download-manager';
+import { ClipIntegrationService, ClipIntegrationOptions } from './services/clip-integration.service';
 import { logger, Logger } from './utils/logger';
 
 // Load environment variables from .env file
@@ -38,7 +39,13 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
   const { options, cliArguments } = parsed;
 
   // Configure logger based on verbose flag
-  const appLogger = new Logger({ verbose: !!options.verbose });
+  const appLogger = new Logger({
+      verbose: !!options.verbose,
+      level: 'info',
+      enableColors: true,
+      enableTimestamp: true,
+      enableProgress: true
+    });
 
   // Handle help and version flags first
   if (options.help) {
@@ -168,7 +175,145 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           });
         }
 
-        appLogger.showSummary('📊 Download Summary', summaryItems);
+        // Clip construction integration
+        let clipConstructionResult = undefined;
+        if (clipDetection && !options.skipClips && file) {
+          // Setup clip integration options
+          const clipIntegrationOptions: ClipIntegrationOptions = {
+            enabled: true,
+            quality: options.clipQuality || 'medium',
+            format: options.clipFormat || 'mp4',
+            ...(options.maxClips !== undefined && { maxClips: options.maxClips }),
+            ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
+            includeSubtitles: options.includeSubtitles || false,
+            includeThumbnails: options.includeThumbnails || false,
+            optimizeForPlatform: options.optimizeForPlatform || 'auto',
+            autoCrop: options.autoCrop || false,
+            maxConcurrentJobs: options.maxConcurrentJobs || 3,
+            verbose: !!options.verbose
+          };
+
+          appLogger.step('🎬 Constructing video clips from AI detection results');
+
+          const clipIntegrationService = new ClipIntegrationService();
+          const baseOutputDir = options.output || './downloads';
+
+          clipConstructionResult = await clipIntegrationService.integrateClipConstruction(
+            mintId,
+            clipDetection,
+            file,
+            audioFile,
+            baseOutputDir,
+            clipIntegrationOptions
+          );
+
+          if (clipConstructionResult.success && clipConstructionResult.summary) {
+            const { summary } = clipConstructionResult;
+            summaryItems.push(
+              { label: 'Clips generated', value: `${summary.successful} videos`, emoji: '🎥' },
+              { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }
+            );
+
+            if (summary.totalFileSize > 0) {
+              summaryItems.push({
+                label: 'Total clip size',
+                value: `${(summary.totalFileSize / 1024 / 1024).toFixed(1)}MB`,
+                emoji: '💾'
+              });
+            }
+
+            if (summary.platformOptimizations.length > 0) {
+              summaryItems.push({
+                label: 'Platform optimizations',
+                value: summary.platformOptimizations.slice(0, 3).join(', ') + (summary.platformOptimizations.length > 3 ? '...' : ''),
+                emoji: '📱'
+              });
+            }
+
+            if (clipConstructionResult.outputPath) {
+              summaryItems.push({
+                label: 'Clips directory',
+                value: clipConstructionResult.outputPath.split(/[/\\]/).pop() || clipConstructionResult.outputPath,
+                emoji: '📁'
+              });
+            }
+
+            appLogger.success(`✅ Successfully generated ${summary.successful} video clips`);
+          } else {
+            summaryItems.push({
+              label: 'Clip construction',
+              value: clipConstructionResult.error || 'Failed',
+              emoji: '❌'
+            });
+            appLogger.warn(`Clip construction failed: ${clipConstructionResult.error}`);
+          }
+        } else if (options.generateClipsOnly) {
+          // Handle generate-clips-only mode
+          appLogger.step('🎬 Generating clips from existing data');
+
+          const clipIntegrationService = new ClipIntegrationService();
+          const baseOutputDir = options.output || './downloads';
+
+          // Try to load existing clip detection results
+          const existingClipDetection = await clipIntegrationService.loadExistingClipDetectionResults(mintId, baseOutputDir);
+          const existingVideoFile = await clipIntegrationService.findSourceVideoFile(mintId, baseOutputDir);
+
+          if (!existingClipDetection) {
+            appLogger.error('No existing clip detection results found. Run full processing first.');
+            process.exit(1);
+          }
+
+          if (!existingVideoFile) {
+            appLogger.error('No source video file found. Run full processing first.');
+            process.exit(1);
+          }
+
+          const clipIntegrationOptions: ClipIntegrationOptions = {
+            enabled: true,
+            quality: options.clipQuality || 'medium',
+            format: options.clipFormat || 'mp4',
+            ...(options.maxClips !== undefined && { maxClips: options.maxClips }),
+            ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
+            includeSubtitles: options.includeSubtitles || false,
+            includeThumbnails: options.includeThumbnails || false,
+            optimizeForPlatform: options.optimizeForPlatform || 'auto',
+            autoCrop: options.autoCrop || false,
+            maxConcurrentJobs: options.maxConcurrentJobs || 3,
+            verbose: !!options.verbose
+          };
+
+          clipConstructionResult = await clipIntegrationService.integrateClipConstruction(
+            mintId,
+            existingClipDetection,
+            existingVideoFile,
+            undefined, // We don't have the audio file path in this mode
+            baseOutputDir,
+            clipIntegrationOptions
+          );
+
+          if (clipConstructionResult.success && clipConstructionResult.summary) {
+            const { summary } = clipConstructionResult;
+            summaryItems.push(
+              { label: 'Clips generated', value: `${summary.successful} videos`, emoji: '🎥' },
+              { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }
+            );
+
+            if (clipConstructionResult.outputPath) {
+              summaryItems.push({
+                label: 'Clips directory',
+                value: clipConstructionResult.outputPath.split(/[/\\]/).pop() || clipConstructionResult.outputPath,
+                emoji: '📁'
+              });
+            }
+
+            appLogger.success(`✅ Successfully generated ${summary.successful} video clips from existing data`);
+          } else {
+            appLogger.error(`Clip construction failed: ${clipConstructionResult.error}`);
+            process.exit(1);
+          }
+        }
+
+        appLogger.showSummary('📊 Processing Summary', summaryItems);
 
         if (error) {
           appLogger.warn(`Warning: ${error}`);

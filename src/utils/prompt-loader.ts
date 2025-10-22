@@ -4,17 +4,19 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { LogLevel } from '../types';
+import { LogLevel, PromptTemplate, PromptVariables } from '../types';
+
+// Re-export types for backward compatibility
+export type { PromptTemplate, PromptVariables } from '../types';
 import { logIfEnabled } from './validators';
 
-export interface PromptTemplate {
-  name: string;
-  template: string;
+// Extended PromptTemplate for file-based templates
+export interface FilePromptTemplate extends PromptTemplate {
   filePath: string;
-  description?: string;
 }
 
-export interface PromptVariables {
+// Extended PromptVariables with specific variable names
+export interface ExtendedPromptVariables extends PromptVariables {
   CHUNK_DURATION_MINUTE: string;
   START_TIME: string;
   END_TIME: string;
@@ -64,11 +66,12 @@ export class PromptLoader {
             }
           }
 
-          const promptTemplate: PromptTemplate = {
+          const promptTemplate: FilePromptTemplate = {
             name: promptName,
-            template: content,
+            content: content || '',
             filePath,
-            ...(description && { description })
+            ...(description && { description }),
+            variables: this.extractVariables(content || '')
           };
 
           this.prompts.set(promptName, promptTemplate);
@@ -123,13 +126,13 @@ export class PromptLoader {
    * @returns The rendered prompt
    */
   renderPrompt(promptTemplate: PromptTemplate, variables: PromptVariables): string {
-    let rendered = promptTemplate.template;
+    let rendered = promptTemplate.content;
 
     // Replace all variable placeholders
-    rendered = rendered.replace(/\{CHUNK_DURATION_MINUTE\}/g, variables.CHUNK_DURATION_MINUTE);
-    rendered = rendered.replace(/\{START_TIME\}/g, variables.START_TIME);
-    rendered = rendered.replace(/\{END_TIME\}/g, variables.END_TIME);
-    rendered = rendered.replace(/\{TRANSCRIPT_CONTENT\}/g, variables.TRANSCRIPT_CONTENT);
+    rendered = rendered.replace(/\{CHUNK_DURATION_MINUTE\}/g, String(variables.CHUNK_DURATION_MINUTE || ''));
+    rendered = rendered.replace(/\{START_TIME\}/g, String(variables.START_TIME || ''));
+    rendered = rendered.replace(/\{END_TIME\}/g, String(variables.END_TIME || ''));
+    rendered = rendered.replace(/\{TRANSCRIPT_CONTENT\}/g, String(variables.TRANSCRIPT_CONTENT || ''));
 
     return rendered;
   }
@@ -150,12 +153,31 @@ export class PromptLoader {
     const missingVariables: string[] = [];
 
     requiredVariables.forEach(variable => {
-      if (!promptTemplate.template.includes(variable)) {
+      if (!promptTemplate.content.includes(variable)) {
         missingVariables.push(variable);
       }
     });
 
     return missingVariables;
+  }
+
+  /**
+   * Extracts variable names from prompt template content
+   * @param content The prompt template content
+   * @returns Array of variable names
+   */
+  private extractVariables(content: string): string[] {
+    const variableRegex = /\{([^}]+)\}/g;
+    const variables: string[] = [];
+    let match;
+
+    while ((match = variableRegex.exec(content)) !== null) {
+      if (match[1]) {
+        variables.push(match[1]);
+      }
+    }
+
+    return [...new Set(variables)]; // Remove duplicates
   }
 
   /**

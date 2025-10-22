@@ -5,56 +5,36 @@
 import * as fs from 'fs';
 import FormData from 'form-data';
 import fetch from 'node-fetch';
-import { LogLevel } from '../types';
+import { LogLevel, TranscriptionOptions, Word, Segment, SimpleSegment, VerboseJsonTranscription, SimpleJsonTranscription } from '../types';
+
+// Re-export types for backward compatibility
+export type { VerboseJsonTranscription, SimpleJsonTranscription } from '../types';
+export type { Word, Segment } from '../types';
 import { logIfEnabled } from '../utils/validators';
 
-export interface TranscriptionOptions {
-  language?: string;
-  response_format?: 'json' | 'text' | 'srt' | 'verbose_json' | 'vtt';
-  temperature?: number;
-  timestamp_granularities?: ('word' | 'segment')[];
-  speaker_labels?: boolean;
+// Extended interfaces for Whisper-specific functionality
+export interface WhisperTranscriptionOptions extends TranscriptionOptions {
+  // Inherit all properties from TranscriptionOptions
 }
 
-export interface Word {
-  word: string;
-  start: number;
-  end: number;
+export interface WhisperSegmentWithSpeaker extends SimpleSegment {
+  id: number;
+}
+
+export interface WhisperWordWithSpeaker extends Word {
   speaker?: string;
 }
 
-export interface Segment {
-  id: number;
-  seek?: number;
-  start: number;
-  end: number;
-  text: string;
-  tokens?: number;
-  temperature?: number;
-  avg_logprob?: number;
-  compression_ratio?: number;
-  no_speech_prob?: number;
-  language?: string;
+export interface WhisperSegmentWithWords extends Segment {
   speaker?: string;
-  words?: Word[];
+  words?: WhisperWordWithSpeaker[];
 }
 
-export interface SimpleSegment {
-  id: number;
-  text: string;
-  speaker: string;
+export interface WhisperVerboseJsonTranscription extends VerboseJsonTranscription {
+  // Inherits all properties from VerboseJsonTranscription
 }
 
-export interface VerboseJsonTranscription {
-  task: string;
-  language: string;
-  duration: number;
-  text: string;
-  words: Word[];
-  segments?: Segment[];
-}
-
-export interface SimpleJsonTranscription {
+export interface WhisperSimpleJsonTranscription {
   segments: SimpleSegment[];
 }
 
@@ -84,13 +64,13 @@ export class WhisperService {
     verbose: boolean = false
   ): Promise<{
     verbose: VerboseJsonTranscription;
-    simple: SimpleJsonTranscription;
+    simple: WhisperSimpleJsonTranscription;
   }> {
     logIfEnabled(LogLevel.INFO, verbose, `Starting audio transcription for: ${audioFilePath}`);
 
     const defaultOptions: TranscriptionOptions = {
       language: 'english',
-      response_format: 'verbose_json',
+      responseFormat: 'verbose_json',
       temperature: 0.0,
       timestamp_granularities: ['word', 'segment'],
       speaker_labels: true
@@ -108,7 +88,7 @@ export class WhisperService {
       const form = new FormData();
       form.append('file', fs.createReadStream(audioFilePath));
       form.append('language', finalOptions.language || 'english');
-      form.append('response_format', finalOptions.response_format || 'verbose_json');
+      form.append('response_format', finalOptions.responseFormat || 'verbose_json');
       form.append('temperature', finalOptions.temperature?.toString() || '0.0');
 
       if (finalOptions.timestamp_granularities) {
@@ -262,7 +242,7 @@ export class WhisperService {
    * @param verboseTranscription The verbose transcription result
    * @returns Simplified transcription with just conversation segments and speaker labels
    */
-  private convertToSimpleJson(verboseTranscription: VerboseJsonTranscription): SimpleJsonTranscription {
+  private convertToSimpleJson(verboseTranscription: VerboseJsonTranscription): WhisperSimpleJsonTranscription {
     const simpleSegments: SimpleSegment[] = [];
 
     if (verboseTranscription.segments && verboseTranscription.segments.length > 0) {
@@ -270,6 +250,8 @@ export class WhisperService {
         if (segment.text && segment.text.trim()) {
           simpleSegments.push({
             id: segment.id,
+            start: segment.start,
+            end: segment.end,
             text: segment.text.trim(),
             speaker: segment.speaker || 'UNKNOWN'
           });
