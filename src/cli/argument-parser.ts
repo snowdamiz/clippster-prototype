@@ -94,20 +94,6 @@ export function parseArguments(args: string[]): ParsedArguments {
         options.generateClipsOnly = true;
         break;
 
-      case '--clip-quality':
-        if (i + 1 < args.length) {
-          const quality = args[++i];
-          if (quality && ['high', 'medium', 'low'].includes(quality)) {
-            options.clipQuality = quality as 'high' | 'medium' | 'low';
-          } else {
-            console.error('Error: --clip-quality must be one of: high, medium, low');
-            process.exit(1);
-          }
-        } else {
-          console.error('Error: --clip-quality requires a quality level');
-          process.exit(1);
-        }
-        break;
 
       case '--clip-format':
         if (i + 1 < args.length) {

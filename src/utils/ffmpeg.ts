@@ -54,72 +54,72 @@ export interface ExtendedSubtitleStyle {
 export const QUALITY_PRESETS = {
   high: {
     resolution: '1920x1080',
-    videoBitrate: '5M',
+    videoBitrate: '12M',
     audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'slow',
-    crf: 18,
-    fps: 30
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60
   },
   medium: {
-    resolution: '1280x720',
-    videoBitrate: '3M',
-    audioBitrate: '192k',
+    resolution: '1920x1080',
+    videoBitrate: '12M',
+    audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'medium',
-    crf: 23,
-    fps: 30
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60
   },
   low: {
-    resolution: '854x480',
-    videoBitrate: '2M',
-    audioBitrate: '128k',
+    resolution: '1920x1080',
+    videoBitrate: '12M',
+    audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'fast',
-    crf: 28,
-    fps: 25
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60
   }
 };
 
 export const PLATFORM_PRESETS = {
   tiktok: {
     resolution: '1080x1920',
-    videoBitrate: '4M',
-    audioBitrate: '192k',
+    videoBitrate: '12M',
+    audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'medium',
-    crf: 23,
-    fps: 30,
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60,
     aspectRatio: '9:16'
   },
   youtube: {
     resolution: '1920x1080',
-    videoBitrate: '8M',
+    videoBitrate: '16M',
     audioBitrate: '384k',
     codec: 'libx264',
-    preset: 'slow',
-    crf: 20,
-    fps: 30,
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60,
     aspectRatio: '16:9'
   },
   instagram: {
     resolution: '1080x1080',
-    videoBitrate: '4M',
-    audioBitrate: '192k',
+    videoBitrate: '12M',
+    audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'medium',
-    crf: 23,
-    fps: 30,
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60,
     aspectRatio: '1:1'
   },
   twitter: {
     resolution: '1920x1080',
-    videoBitrate: '5M',
-    audioBitrate: '256k',
+    videoBitrate: '16M',
+    audioBitrate: '320k',
     codec: 'libx264',
-    preset: 'medium',
-    crf: 22,
-    fps: 30,
+    preset: 'veryslow',
+    crf: 15,
+    fps: 60,
     aspectRatio: '16:9'
   }
 };
