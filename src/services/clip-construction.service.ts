@@ -9,6 +9,7 @@ import { DetectedClip } from '../types';
 import {
   ClipConstructionOptions,
   ClipConstructionProgress,
+  ClipConstructionResult,
   ConstructedClip,
   ClipMetadata,
   FailedClip,
@@ -18,13 +19,16 @@ import {
 } from '../types/clip-construction';
 import { LogLevel } from '../types';
 import { logIfEnabled } from '../utils/validators';
+import { ExtendedDirectoryStructure, FileOrganizationService } from '../utils/file-organization';
 
 export class ClipConstructionService {
   private ffmpegService: FFmpegService;
+  private fileOrganizer: FileOrganizationService;
   private stats: ProcessingStats;
 
   constructor() {
     this.ffmpegService = new FFmpegService();
+    this.fileOrganizer = new FileOrganizationService();
     this.stats = {
       startTime: new Date(),
       clipsProcessed: 0,
@@ -48,12 +52,9 @@ export class ClipConstructionService {
     detectedClips: DetectedClip[],
     sourceVideoFile: string,
     options: ClipConstructionOptions,
+    directoryStructure: ExtendedDirectoryStructure,
     onProgress?: (progress: ClipConstructionProgress) => void
-  ): Promise<{
-    successful: ConstructedClip[];
-    failed: FailedClip[];
-    skipped: DetectedClip[];
-  }> {
+  ): Promise<ClipConstructionResult> {
     logIfEnabled(LogLevel.INFO, options.verbose !== false, '🎬 Starting video clip construction', {
       totalClips: detectedClips.length,
       sourceFile: sourceVideoFile,
@@ -64,8 +65,8 @@ export class ClipConstructionService {
     // Validate inputs
     await this.validateInputs(sourceVideoFile, options);
 
-    // Create output directory structure
-    await this.createDirectoryStructure(options.outputDirectory, detectedClips[0]?.id || 'unknown');
+    // Note: Directory structure should be created by the calling service (ClipIntegrationService)
+    // This service should not create its own directory structure
 
     const successful: ConstructedClip[] = [];
     const failed: FailedClip[] = [];
@@ -97,7 +98,7 @@ export class ClipConstructionService {
 
       try {
         const startTime = Date.now();
-        const constructedClip = await this.constructSingleClip(clip, sourceVideoFile, options);
+        const constructedClip = await this.constructSingleClip(clip, sourceVideoFile, options, directoryStructure);
         const constructionTime = Date.now() - startTime;
 
         constructedClip.constructionTime = constructionTime;
@@ -172,7 +173,38 @@ export class ClipConstructionService {
       avgTime: `${Math.round(this.stats.avgProcessingTime)}ms per clip`
     });
 
-    return { successful, failed, skipped };
+    // Calculate quality distribution
+    const qualityDistribution = { high: 0, medium: 0, low: 0 };
+    successful.forEach(clip => {
+      const quality = clip.quality as 'high' | 'medium' | 'low';
+      qualityDistribution[quality]++;
+    });
+
+    // Calculate type distribution
+    const typeDistribution = { continuous: 0, spliced: 0 };
+    successful.forEach(clip => {
+      typeDistribution[clip.type]++;
+    });
+
+    const summary = {
+      totalClips: detectedClips.length,
+      successful: successful.length,
+      failed: failed.length,
+      skipped: skipped.length,
+      totalTime: (this.stats.endTime!.getTime() - this.stats.startTime.getTime()) / 1000,
+      avgConstructionTime: this.stats.avgProcessingTime,
+      totalFileSize: successful.reduce((sum, clip) => sum + clip.fileSize, 0),
+      qualityDistribution,
+      typeDistribution
+    };
+
+    return {
+      successful,
+      failed,
+      skipped,
+      summary,
+      outputDirectory: options.outputDirectory
+    };
   }
 
   /**
@@ -185,11 +217,17 @@ export class ClipConstructionService {
   private async constructSingleClip(
     clip: DetectedClip,
     sourceVideoFile: string,
-    options: ClipConstructionOptions
+    options: ClipConstructionOptions,
+    directoryStructure: ExtendedDirectoryStructure
   ): Promise<ConstructedClip> {
     const clipId = clip.id;
     const filename = clip.filename || this.generateFilename(clip);
-    const outputPath = path.join(options.outputDirectory, filename);
+
+    // Use the appropriate directory based on clip type
+    const targetDir = clip.type === 'spliced'
+      ? directoryStructure.spliced
+      : directoryStructure.continuous;
+    const outputPath = path.join(targetDir, filename);
 
     logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `🎞️ Constructing clip: ${clip.title}`, {
       clipId,
@@ -236,7 +274,7 @@ export class ClipConstructionService {
     // Generate subtitles if requested
     let subtitleFile: string | undefined;
     if (options.includeSubtitles && clip.combined_transcript) {
-      subtitleFile = await this.generateSubtitles(clip, options);
+      subtitleFile = await this.generateSubtitles(clip, options, directoryStructure);
       if (options.includeSubtitles === true) {
         // Burn subtitles into video using temporary file
         const tempFile = path.join(
@@ -252,7 +290,7 @@ export class ClipConstructionService {
     // Generate thumbnail if requested
     let thumbnailFile: string | undefined;
     if (options.includeThumbnails) {
-      thumbnailFile = await this.generateThumbnail(clip, videoFile, options);
+      thumbnailFile = await this.generateThumbnail(clip, videoFile, options, directoryStructure);
     }
 
     // Get file size
@@ -350,11 +388,11 @@ export class ClipConstructionService {
    */
   private async generateSubtitles(
     clip: DetectedClip,
-    options: ClipConstructionOptions
+    options: ClipConstructionOptions,
+    directoryStructure: ExtendedDirectoryStructure
   ): Promise<string> {
     const subtitlePath = path.join(
-      path.dirname(options.outputDirectory),
-      'subtitles',
+      directoryStructure.assetsSubtitles,
       `${path.basename(clip.filename, '.mp4')}.srt`
     );
 
@@ -402,11 +440,11 @@ export class ClipConstructionService {
   private async generateThumbnail(
     clip: DetectedClip,
     videoFile: string,
-    options: ClipConstructionOptions
+    options: ClipConstructionOptions,
+    directoryStructure: ExtendedDirectoryStructure
   ): Promise<string> {
     const thumbnailPath = path.join(
-      path.dirname(options.outputDirectory),
-      'thumbnails',
+      directoryStructure.assetsThumbnails,
       `${path.basename(clip.filename, '.mp4')}.jpg`
     );
 
@@ -557,28 +595,7 @@ export class ClipConstructionService {
     return tags;
   }
 
-  /**
-   * Creates directory structure for clip output
-   * @param baseDirectory Base output directory
-   * @param mintId Mint ID for subdirectory naming
-   */
-  private async createDirectoryStructure(baseDirectory: string, mintId: string): Promise<void> {
-    const directories = [
-      baseDirectory,
-      path.join(baseDirectory, 'clips'),
-      path.join(baseDirectory, 'clips', 'continuous'),
-      path.join(baseDirectory, 'clips', 'spliced'),
-      path.join(baseDirectory, 'subtitles'),
-      path.join(baseDirectory, 'thumbnails'),
-      path.join(baseDirectory, 'metadata'),
-      path.join(baseDirectory, 'temp')
-    ];
-
-    for (const dir of directories) {
-      await fs.promises.mkdir(dir, { recursive: true });
-    }
-  }
-
+  
   /**
    * Validates input parameters
    * @param sourceVideoFile Path to source video

@@ -22,6 +22,7 @@ import { logIfEnabled } from '../utils/validators';
 export interface ExtendedClipIntegrationOptions extends ClipIntegrationOptions {
   maxClips?: number;
   viralityThreshold?: number;
+  inputAudioFile?: string;
 }
 
 export interface ExtendedClipIntegrationResult extends ClipIntegrationResult {
@@ -133,6 +134,24 @@ export class ClipIntegrationService {
         options.verbose
       );
 
+      // Move source files to organized directories
+      const sourceVideoName = path.basename(sourceVideoFile);
+      const organizedSourceVideo = path.join(directoryStructure.source, sourceVideoName);
+      if (sourceVideoFile !== organizedSourceVideo) {
+        await fs.promises.rename(sourceVideoFile, organizedSourceVideo);
+        sourceVideoFile = organizedSourceVideo; // Update reference
+      }
+
+      let sourceAudioFile: string | undefined;
+      if (options.inputAudioFile) {
+        const sourceAudioName = path.basename(options.inputAudioFile);
+        const organizedSourceAudio = path.join(directoryStructure.source, sourceAudioName);
+        if (options.inputAudioFile !== organizedSourceAudio) {
+          await fs.promises.rename(options.inputAudioFile, organizedSourceAudio);
+        }
+        sourceAudioFile = organizedSourceAudio;
+      }
+
       // Filter clips based on options
       const filteredClips = this.filterClips(clipDetectionResult.clips, options);
 
@@ -155,13 +174,10 @@ export class ClipIntegrationService {
         };
       }
 
-      // Create output directory for clips
-      const clipsOutputDir = path.join(directoryStructure.base, 'clips');
-
-      // Setup construction options
+      // Setup construction options using the proper directory structure
       const constructionOptions: ClipConstructionOptions = {
         inputVideoFile: sourceVideoFile,
-        outputDirectory: clipsOutputDir,
+        outputDirectory: directoryStructure.base, // Use base directory, construction service will handle subdirectories
         quality: options.quality,
         format: options.format,
         includeSubtitles: options.includeSubtitles,
@@ -188,12 +204,12 @@ export class ClipIntegrationService {
         maxRetries: 2
       };
 
-      // Process clips using batch processor
-      const constructionResult = await this.batchProcessor.processBatch(
+      // Process clips using construction service directly (to avoid duplicate directory creation)
+      const constructionResult = await this.clipConstructionService.constructClips(
         filteredClips,
         sourceVideoFile,
         constructionOptions,
-        batchOptions
+        directoryStructure
       );
 
       // Platform optimization if requested

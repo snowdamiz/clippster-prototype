@@ -83,8 +83,8 @@ export class FileOrganizationService {
       base: mintDir,
       source: path.join(mintDir, 'source'),
       clips: clipsDir,
-      subtitles: path.join(mintDir, 'subtitles'),
-      thumbnails: path.join(mintDir, 'thumbnails'),
+      subtitles: path.join(assetsDir, 'subtitles'), // Use assets subfolder
+      thumbnails: path.join(assetsDir, 'thumbnails'), // Use assets subfolder
       metadata: path.join(mintDir, 'metadata'),
       assets: assetsDir,
       logs: path.join(mintDir, 'logs'),
@@ -101,8 +101,6 @@ export class FileOrganizationService {
       structure.base,
       structure.source,
       structure.clips,
-      structure.subtitles,
-      structure.thumbnails,
       structure.metadata,
       structure.assets,
       structure.logs,
@@ -128,11 +126,18 @@ export class FileOrganizationService {
       }
     }
 
-    // Create .gitkeep files to preserve empty directories
-    for (const dir of directories) {
+    // Create .gitkeep files only for directories that should remain empty
+    const emptyDirs = [
+      structure.continuous,
+      structure.spliced,
+      structure.assetsTemp
+    ];
+
+    for (const dir of emptyDirs) {
       const gitkeepFile = path.join(dir, '.gitkeep');
       try {
         await fs.promises.writeFile(gitkeepFile, '');
+        logIfEnabled(LogLevel.DEBUG, verbose, `📄 Created .gitkeep in empty directory: ${dir}`);
       } catch (error) {
         // Don't fail if .gitkeep creation fails
         logIfEnabled(LogLevel.WARN, verbose, `Warning: Could not create .gitkeep in ${dir}: ${error}`);
@@ -252,7 +257,7 @@ export class FileOrganizationService {
         let newSubtitlePath: string | undefined;
         if (clip.subtitles) {
           const subtitleName = path.basename(clip.subtitles);
-          newSubtitlePath = path.join(structure.subtitles, subtitleName);
+          newSubtitlePath = path.join(structure.assetsSubtitles, subtitleName);
           if (clip.subtitles !== newSubtitlePath) {
             await fs.promises.rename(clip.subtitles, newSubtitlePath);
             logIfEnabled(LogLevel.DEBUG, verbose, `📄 Moved subtitle: ${subtitleName}`);
@@ -263,7 +268,7 @@ export class FileOrganizationService {
         let newThumbnailPath: string | undefined;
         if (clip.thumbnail) {
           const thumbnailName = path.basename(clip.thumbnail);
-          newThumbnailPath = path.join(structure.thumbnails, thumbnailName);
+          newThumbnailPath = path.join(structure.assetsThumbnails, thumbnailName);
           if (clip.thumbnail !== newThumbnailPath) {
             await fs.promises.rename(clip.thumbnail, newThumbnailPath);
             logIfEnabled(LogLevel.DEBUG, verbose, `🖼️ Moved thumbnail: ${thumbnailName}`);

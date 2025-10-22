@@ -17,6 +17,8 @@ import {
 import { ClipConstructionService } from './clip-construction.service';
 import { LogLevel } from '../types';
 import { logIfEnabled } from '../utils/validators';
+import { FileOrganizationService, ExtendedDirectoryStructure } from '../utils/file-organization';
+import { FileOrganizationConfig } from '../types';
 
 interface QueuedClip {
   clip: DetectedClip;
@@ -38,6 +40,7 @@ interface ProcessingJob {
 
 export class BatchClipProcessor extends EventEmitter {
   private clipConstructionService: ClipConstructionService;
+  private fileOrganizer: FileOrganizationService;
   private processingQueue: QueuedClip[] = [];
   private activeJobs: Map<string, ProcessingJob> = new Map();
   private completedJobs: ProcessingJob[] = [];
@@ -49,6 +52,7 @@ export class BatchClipProcessor extends EventEmitter {
   constructor() {
     super();
     this.clipConstructionService = new ClipConstructionService();
+    this.fileOrganizer = new FileOrganizationService();
     this.maxConcurrentJobs = 3; // Default concurrent jobs
     this.stats = {
       startTime: new Date(),
@@ -282,11 +286,36 @@ export class BatchClipProcessor extends EventEmitter {
         viralityScore: queuedClip.clip.virality_score
       });
 
+      // Note: The batch processor should not create its own directory structure
+      // This should be handled by the calling service
+      // For now, we'll create a minimal structure to prevent errors, but this should be refactored
+      const fileOrgConfig: FileOrganizationConfig = {
+        baseDirectory: queuedClip.options.outputDirectory,
+        mintId: queuedClip.clip.id, // Use clip ID only as last resort
+        createSubdirectories: false, // Don't create subdirectories in batch processor
+        directoryStructure: {
+          source: 'source',
+          clips: 'clips',
+          metadata: 'metadata',
+          assets: 'assets'
+        },
+        fileNaming: {
+          includeMintId: false,
+          includeTimestamp: false,
+          includeViralityScore: false,
+          separator: '_',
+          mintId: queuedClip.clip.id
+        }
+      };
+
+      const directoryStructure = await this.fileOrganizer.createDirectoryStructure(fileOrgConfig, queuedClip.options.verbose);
+
       // Process the clip
       const result = await this.clipConstructionService.constructClips(
         [queuedClip.clip],
         queuedClip.sourceVideoFile,
         queuedClip.options,
+        directoryStructure,
         (progress) => {
           job.progress = progress;
           this.emit('progress', { jobId, progress });
