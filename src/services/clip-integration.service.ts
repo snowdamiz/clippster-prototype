@@ -20,7 +20,6 @@ import { logIfEnabled } from '../utils/validators';
 
 // Extended interfaces for integration-specific functionality
 export interface ExtendedClipIntegrationOptions extends ClipIntegrationOptions {
-  maxClips?: number;
   viralityThreshold?: number;
   inputAudioFile?: string;
 }
@@ -198,7 +197,7 @@ export class ClipIntegrationService {
         prioritizeByVirality: true,
         skipLowVirality: true,
         viralityThreshold: options.viralityThreshold || 0,
-        maxClipsPerBatch: options.maxClips || filteredClips.length,
+        maxClipsPerBatch: filteredClips.length,
         continueOnError: true,
         retryFailedClips: true,
         maxRetries: 2
@@ -444,15 +443,6 @@ export class ClipIntegrationService {
 
       if (options.verbose) {
         console.log(`📊 Filtered ${beforeCount - filteredClips.length} clips below virality threshold ${options.viralityThreshold}`);
-      }
-    }
-
-    // Limit by max clips
-    if (options.maxClips && options.maxClips > 0) {
-      filteredClips = filteredClips.slice(0, options.maxClips);
-
-      if (options.verbose && filteredClips.length < clips.length) {
-        console.log(`📊 Limited to ${options.maxClips} clips (from ${clips.length} total)`);
       }
     }
 

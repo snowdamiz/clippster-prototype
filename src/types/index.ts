@@ -8,13 +8,11 @@ export interface CLIOptions {
   verbose?: boolean;
   output?: string | undefined;
   index?: number;
-  skipClips?: boolean;
   prompt?: string;
   // Clip construction options
   generateClipsOnly?: boolean;
   clipQuality?: 'high' | 'medium' | 'low';
   clipFormat?: 'mp4' | 'mov' | 'webm';
-  maxClips?: number;
   viralityThreshold?: number;
   includeSubtitles?: boolean;
   includeThumbnails?: boolean;

@@ -246,65 +246,61 @@ export class DownloadManager {
             logIfEnabled(LogLevel.WARN, verbose, `⚠️ Failed to save transcript file`, transcriptSaveError);
           }
 
-          // Perform AI clip detection unless explicitly skipped
+          // Perform AI clip detection (always enabled)
           let clipDetectionResults: ClipDetectionResponse | undefined;
           let clipsFilePath: string | undefined;
 
-          if (!options.skipClips) {
-            logger.step(`Analyzing content for viral clips`, 4, 4);
-            try {
-              clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
-                transcriptionResult.verbose,
-                options.prompt || 'default',
-                verbose,
-                (progress) => {
-                  logger.showProgress(
-                    progress.chunk,
-                    progress.total_chunks,
-                    `AI Analysis (Chunk ${progress.chunk}/${progress.total_chunks}, ${progress.clips_found} clips found)`
-                  );
-                }
-              );
-
-              logger.success(`AI clip detection completed`);
-              logIfEnabled(LogLevel.INFO, verbose, `🧠 Successfully analyzed content for viral clips`);
-              logIfEnabled(LogLevel.INFO, verbose, `  🎯 Total clips found: ${clipDetectionResults.total_clips_found}`);
-              logIfEnabled(LogLevel.INFO, verbose, `  📊 Chunks processed: ${clipDetectionResults.stream_info.chunks_processed}`);
-              logIfEnabled(LogLevel.INFO, verbose, `  ⏱️  Stream duration: ${Math.round(clipDetectionResults.stream_info.duration)}s`);
-
-              if (clipDetectionResults.clips.length > 0) {
-                const avgVirality = Math.round(
-                  clipDetectionResults.clips.reduce((sum, clip) => sum + clip.virality_score, 0) / clipDetectionResults.clips.length
+          logger.step(`Analyzing content for viral clips`, 4, 4);
+          try {
+            clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
+              transcriptionResult.verbose,
+              options.prompt || 'default',
+              verbose,
+              (progress) => {
+                logger.showProgress(
+                  progress.chunk,
+                  progress.total_chunks,
+                  `AI Analysis (Chunk ${progress.chunk}/${progress.total_chunks}, ${progress.clips_found} clips found)`
                 );
-                logIfEnabled(LogLevel.INFO, verbose, `  📈 Average virality score: ${avgVirality}/100`);
-
-                // Show top 3 clips
-                const topClips = clipDetectionResults.clips.slice(0, 3);
-                logIfEnabled(LogLevel.INFO, verbose, `  🏆 Top clips:`);
-                topClips.forEach((clip, index) => {
-                  logIfEnabled(LogLevel.INFO, verbose, `    ${index + 1}. ${clip.title} (${clip.virality_score}/100)`);
-                });
-              } else {
-                logIfEnabled(LogLevel.INFO, verbose, `  🤷 No viral-worthy clips detected in this stream`);
               }
+            );
 
-              // Save clip detection results to file
-              clipsFilePath = await this.saveClipDetectionResults(
-                clipDetectionResults,
-                outputDir,
-                mintId,
-                streamId,
-                verbose
+            logger.success(`AI clip detection completed`);
+            logIfEnabled(LogLevel.INFO, verbose, `🧠 Successfully analyzed content for viral clips`);
+            logIfEnabled(LogLevel.INFO, verbose, `  🎯 Total clips found: ${clipDetectionResults.total_clips_found}`);
+            logIfEnabled(LogLevel.INFO, verbose, `  📊 Chunks processed: ${clipDetectionResults.stream_info.chunks_processed}`);
+            logIfEnabled(LogLevel.INFO, verbose, `  ⏱️  Stream duration: ${Math.round(clipDetectionResults.stream_info.duration)}s`);
+
+            if (clipDetectionResults.clips.length > 0) {
+              const avgVirality = Math.round(
+                clipDetectionResults.clips.reduce((sum, clip) => sum + clip.virality_score, 0) / clipDetectionResults.clips.length
               );
+              logIfEnabled(LogLevel.INFO, verbose, `  📈 Average virality score: ${avgVirality}/100`);
 
-            } catch (clipDetectionError) {
-              const errorMessage = clipDetectionError instanceof Error ? clipDetectionError.message : 'Unknown clip detection error';
-              logger.error(`AI clip detection failed: ${errorMessage}`);
-              logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to analyze content for clips', clipDetectionError);
-              // Continue without clip detection - don't fail the entire process
+              // Show top 3 clips
+              const topClips = clipDetectionResults.clips.slice(0, 3);
+              logIfEnabled(LogLevel.INFO, verbose, `  🏆 Top clips:`);
+              topClips.forEach((clip, index) => {
+                logIfEnabled(LogLevel.INFO, verbose, `    ${index + 1}. ${clip.title} (${clip.virality_score}/100)`);
+              });
+            } else {
+              logIfEnabled(LogLevel.INFO, verbose, `  🤷 No viral-worthy clips detected in this stream`);
             }
-          } else {
-            logIfEnabled(LogLevel.INFO, verbose, `⏭️  Skipping AI clip detection as requested`);
+
+            // Save clip detection results to file
+            clipsFilePath = await this.saveClipDetectionResults(
+              clipDetectionResults,
+              outputDir,
+              mintId,
+              streamId,
+              verbose
+            );
+
+          } catch (clipDetectionError) {
+            const errorMessage = clipDetectionError instanceof Error ? clipDetectionError.message : 'Unknown clip detection error';
+            logger.error(`AI clip detection failed: ${errorMessage}`);
+            logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to analyze content for clips', clipDetectionError);
+            // Continue without clip detection - don't fail the entire process
           }
 
           return {

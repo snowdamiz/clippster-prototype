@@ -44,7 +44,6 @@ export interface Chunk {
 export interface ClipDetectionOptions {
   mintId: string;
   verbose?: boolean;
-  skipClips?: boolean;
 }
 
 export interface ClipAnalysisProgress {

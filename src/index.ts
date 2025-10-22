@@ -7,7 +7,7 @@
 import * as dotenv from 'dotenv';
 import { ParsedArguments, LogLevel } from './types';
 import { validateSplMintId, logIfEnabled } from './utils/validators';
-import { parseArguments, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
+import { parseArgumentsWithPrompts, showHelp, showVersion, validateParsedArguments } from './cli/argument-parser';
 import { DownloadManager } from './services/download-manager';
 import { ClipIntegrationService, ClipIntegrationOptions } from './services/clip-integration.service';
 import { logger, Logger } from './utils/logger';
@@ -161,29 +161,22 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
               emoji: '📄'
             });
           }
-        } else if (!options.skipClips) {
-          summaryItems.push({
-            label: 'Clip detection',
-            value: 'Failed or skipped',
-            emoji: '⚠️'
-          });
         } else {
           summaryItems.push({
             label: 'Clip detection',
-            value: 'Skipped as requested',
-            emoji: '⏭️'
+            value: 'Failed',
+            emoji: '⚠️'
           });
         }
 
         // Clip construction integration
         let clipConstructionResult = undefined;
-        if (clipDetection && !options.skipClips && file) {
+        if (clipDetection && file) {
           // Setup clip integration options
           const clipIntegrationOptions: ClipIntegrationOptions = {
             enabled: true,
             quality: options.clipQuality || 'medium',
             format: options.clipFormat || 'mp4',
-            ...(options.maxClips !== undefined && { maxClips: options.maxClips }),
             ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
             includeSubtitles: options.includeSubtitles || false,
             includeThumbnails: options.includeThumbnails || false,
@@ -272,7 +265,6 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
             enabled: true,
             quality: options.clipQuality || 'medium',
             format: options.clipFormat || 'mp4',
-            ...(options.maxClips !== undefined && { maxClips: options.maxClips }),
             ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
             includeSubtitles: options.includeSubtitles || false,
             includeThumbnails: options.includeThumbnails || false,
@@ -336,9 +328,9 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
  */
 async function main(): Promise<void> {
   try {
-    // Parse command line arguments
+    // Parse command line arguments with interactive prompts
     const args = process.argv.slice(2);
-    const parsed = parseArguments(args);
+    const parsed = await parseArgumentsWithPrompts(args);
 
     // Validate parsed arguments
     if (!validateParsedArguments(parsed, !!parsed.options.verbose)) {
