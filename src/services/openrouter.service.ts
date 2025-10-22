@@ -14,18 +14,21 @@ import { VerboseJsonTranscription } from './whisper.service';
 import { LogLevel } from '../types';
 import { logIfEnabled } from '../utils/validators';
 import { PromptLoader, PromptVariables } from '../utils/prompt-loader';
+import { TranscriptMatcherService } from './transcript-matcher.service';
 
 export class OpenRouterService {
   private apiKey: string;
   private model: string;
   private baseUrl: string;
   private promptLoader: PromptLoader;
+  private transcriptMatcher: TranscriptMatcherService;
 
   constructor() {
     this.apiKey = process.env.OPENROUTER_API_KEY || '';
     this.model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     this.baseUrl = 'https://openrouter.ai/api/v1/chat/completions';
     this.promptLoader = new PromptLoader();
+    this.transcriptMatcher = new TranscriptMatcherService();
 
     if (!this.apiKey) {
       throw new Error('OPENROUTER_API_KEY environment variable is required');
@@ -119,8 +122,11 @@ export class OpenRouterService {
       }
     }
 
+    // Validate and correct timestamps for all clips
+    const validatedClips = this.validateAndCorrectTimestamps(allClips, transcript, verbose);
+
     // Merge and deduplicate clips across chunks
-    const finalClips = this.mergeAndDeduplicateClips(allClips, transcript);
+    const finalClips = this.mergeAndDeduplicateClips(validatedClips, transcript);
 
     const streamInfo: StreamInfo = {
       duration: transcript.duration,
@@ -317,6 +323,99 @@ export class OpenRouterService {
   }
 
   
+  /**
+   * Validates and corrects AI-returned timestamps against actual transcript
+   * @param clips All clips with AI-provided timestamps
+   * @param transcript Original transcript with word-level timing
+   * @param verbose Enable verbose logging
+   * @returns Clips with corrected timestamps
+   */
+  private validateAndCorrectTimestamps(
+    clips: DetectedClip[],
+    transcript: VerboseJsonTranscription,
+    verbose: boolean
+  ): DetectedClip[] {
+    logIfEnabled(LogLevel.INFO, verbose, '🔍 Validating and correcting clip timestamps', {
+      totalClips: clips.length
+    });
+
+    const correctedClips: DetectedClip[] = [];
+
+    for (const clip of clips) {
+      try {
+        // Validate and correct each segment
+        const correctedSegments = clip.segments.map((segment, segmentIndex) => {
+          logIfEnabled(LogLevel.DEBUG, verbose, `🔎 Validating ${clip.id} segment ${segmentIndex + 1}`, {
+            aiTimestamp: segment.start_time.toFixed(2),
+            transcriptLength: segment.transcript.length,
+            firstWords: segment.transcript.substring(0, 50)
+          });
+          
+          // Use the transcript text to find actual timestamps
+          const match = this.transcriptMatcher.findTranscriptMatch(
+            segment.transcript,
+            transcript,
+            segment.start_time, // Use AI's time as a hint
+            verbose
+          );
+
+          if (match && match.confidence >= 0.7) {
+            // Calculate actual duration from matched timestamps
+            const actualDuration = match.endTime - match.startTime;
+            
+            logIfEnabled(LogLevel.DEBUG, verbose, `✅ Corrected segment ${segmentIndex + 1} of ${clip.id}`, {
+              originalStart: segment.start_time.toFixed(2),
+              correctedStart: match.startTime.toFixed(2),
+              originalEnd: segment.end_time.toFixed(2),
+              correctedEnd: match.endTime.toFixed(2),
+              timeDiff: Math.abs(segment.start_time - match.startTime).toFixed(2),
+              confidence: match.confidence.toFixed(2)
+            });
+
+            return {
+              start_time: match.startTime,
+              end_time: match.endTime,
+              duration: actualDuration,
+              transcript: segment.transcript
+            };
+          } else {
+            // If we can't find a match, log warning and keep original
+            // Always log this warning, even in non-verbose mode, as it indicates a problem
+            logIfEnabled(LogLevel.WARN, true, `⚠️ Could not validate segment ${segmentIndex + 1} of ${clip.id}`, {
+              clipTitle: clip.title,
+              originalStart: segment.start_time.toFixed(2),
+              transcriptPreview: segment.transcript.substring(0, 80) + '...',
+              confidence: match ? match.confidence.toFixed(2) : 'no match'
+            });
+            
+            return segment;
+          }
+        });
+
+        // Recalculate total duration
+        const totalDuration = correctedSegments.reduce((sum, seg) => sum + seg.duration, 0);
+
+        correctedClips.push({
+          ...clip,
+          segments: correctedSegments,
+          total_duration: totalDuration
+        });
+
+      } catch (error) {
+        logIfEnabled(LogLevel.ERROR, verbose, `❌ Error validating clip ${clip.id}`, error);
+        // Keep original clip if validation fails
+        correctedClips.push(clip);
+      }
+    }
+
+    logIfEnabled(LogLevel.INFO, verbose, '✅ Timestamp validation completed', {
+      totalClips: correctedClips.length,
+      successRate: `${correctedClips.length}/${clips.length}`
+    });
+
+    return correctedClips;
+  }
+
   /**
    * Merges and deduplicates clips from multiple chunks
    * @param allClips All clips found across all chunks
