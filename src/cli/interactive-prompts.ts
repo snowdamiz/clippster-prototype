@@ -3,14 +3,72 @@
  */
 
 import prompts from 'prompts';
+import * as fs from 'fs';
+import * as path from 'path';
 import { CLIOptions } from '../types';
 import { PromptLoader } from '../utils/prompt-loader';
 
 /**
+ * Prompts user to select a video file from the downloads folder
+ * @param downloadsDir The downloads directory to search
+ * @returns Selected video file path or null if none selected
+ */
+export async function promptForVideoFile(downloadsDir: string = './downloads'): Promise<string | null> {
+  // Check if downloads directory exists
+  if (!fs.existsSync(downloadsDir)) {
+    console.error(`Downloads directory not found: ${downloadsDir}`);
+    return null;
+  }
+
+  // Find all .mp4 files in downloads folder
+  const mp4Files: string[] = [];
+  
+  const scanDirectory = (dir: string) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        scanDirectory(fullPath);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.mp4')) {
+        mp4Files.push(fullPath);
+      }
+    }
+  };
+
+  scanDirectory(downloadsDir);
+
+  if (mp4Files.length === 0) {
+    console.error('No .mp4 files found in downloads folder.');
+    return null;
+  }
+
+  // Create choices for the prompt
+  const choices = mp4Files.map(filePath => {
+    const relativePath = path.relative(downloadsDir, filePath);
+    const stats = fs.statSync(filePath);
+    const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+    return {
+      title: `${relativePath} (${sizeMB} MB)`,
+      value: filePath
+    };
+  });
+
+  const response = await prompts({
+    type: 'select',
+    name: 'value',
+    message: 'Select a video file to process:',
+    choices: choices
+  });
+
+  return response.value || null;
+}
+
+/**
  * Prompts user interactively for CLI options
+ * @param includeStreamIndex Whether to include stream index prompt (only for Mode A)
  * @returns CLIOptions configured by user
  */
-export async function promptForOptions(): Promise<CLIOptions> {
+export async function promptForOptions(includeStreamIndex: boolean = true): Promise<CLIOptions> {
   const options: CLIOptions = {};
 
   // Verbose output
@@ -22,27 +80,29 @@ export async function promptForOptions(): Promise<CLIOptions> {
   });
   options.verbose = verboseResponse.value;
 
-  // Output directory
-  const outputResponse = await prompts({
-    type: 'text',
-    name: 'value',
-    message: 'Output directory:',
-    initial: './downloads'
-  });
-  if (outputResponse.value && outputResponse.value !== './downloads') {
-    options.output = outputResponse.value;
-  }
+  // Output directory (only show in Mode A, Mode B already selected the file)
+  if (includeStreamIndex) {
+    const outputResponse = await prompts({
+      type: 'text',
+      name: 'value',
+      message: 'Output directory:',
+      initial: './downloads'
+    });
+    if (outputResponse.value && outputResponse.value !== './downloads') {
+      options.output = outputResponse.value;
+    }
 
-  // Stream index
-  const indexResponse = await prompts({
-    type: 'number',
-    name: 'value',
-    message: 'Stream index (1=newest, 2=second newest, etc.):',
-    initial: 1,
-    min: 1
-  });
-  if (indexResponse.value && indexResponse.value > 1) {
-    options.index = indexResponse.value;
+    // Stream index (only for Mode A - downloading from mint ID)
+    const indexResponse = await prompts({
+      type: 'number',
+      name: 'value',
+      message: 'Stream index (1=newest, 2=second newest, etc.):',
+      initial: 1,
+      min: 1
+    });
+    if (indexResponse.value && indexResponse.value > 1) {
+      options.index = indexResponse.value;
+    }
   }
 
   // AI clip detection settings (always enabled)

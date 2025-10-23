@@ -59,7 +59,8 @@ export async function parseArgumentsWithPrompts(args: string[]): Promise<ParsedA
     return parsed;
   }
 
-  // If mint ID provided, prompt for all options
+  // If mint ID provided, prompt for all options immediately
+  // If no mint ID, options will be prompted after file selection in index.ts
   if (parsed.cliArguments.length > 0) {
     const interactiveOptions = await promptForOptions();
     parsed.options = { ...parsed.options, ...interactiveOptions };
@@ -74,7 +75,7 @@ export async function parseArgumentsWithPrompts(args: string[]): Promise<ParsedA
  */
 export function generateHelpText(): string {
   return `
-Usage: clippster <spl_mint_id>
+Usage: clippster [spl_mint_id]
 
 A CLI tool for downloading streams from SPL mint IDs with AI-powered clip detection and video construction
 
@@ -83,10 +84,11 @@ Options:
   -v, --version        Show version number
 
 Arguments:
-  spl_mint_id          The SPL mint ID to download from (base58 string, typically 43-44 characters)
+  spl_mint_id          (Optional) The SPL mint ID to download from (base58 string, typically 43-44 characters)
+                       If not provided, you'll be prompted to select an existing video file from the downloads folder
 
 Interactive Configuration:
-  After providing the mint ID, you'll be guided through an interactive setup where you can configure:
+  After providing the mint ID (or selecting a file), you'll be guided through an interactive setup where you can configure:
   
   • Verbose output
   • Output directory
@@ -110,8 +112,11 @@ Features:
   ⚡ Batch processing with concurrent operations
 
 Examples:
-  # Start interactive session
+  # Start interactive session with a mint ID (downloads from PumpFun)
   clippster 11111111111111111111111111111112
+
+  # Start interactive session without mint ID (select existing video file)
+  clippster
 
   # Show help
   clippster --help
@@ -147,23 +152,19 @@ export function validateParsedArguments(parsed: ParsedArguments, verbose: boolea
 
   logIfEnabled(LogLevel.DEBUG, verbose, 'Validating parsed arguments', { options, cliArguments });
 
-  // Validate that we have exactly one mint ID when not showing help/version
+  // Validate that we have at most one mint ID when not showing help/version
   if (!options.help && !options.version) {
-    if (cliArguments.length === 0) {
-      console.error('Error: SPL mint ID is required.');
-      console.log('Use --help for usage information.');
-      return false;
-    }
-
     if (cliArguments.length > 1) {
       console.error(`Error: Only one SPL mint ID is allowed, but ${cliArguments.length} were provided.`);
       return false;
     }
   }
 
-  // Always download when processing a mint ID (default behavior)
+  // Log mode based on arguments
   if (cliArguments.length === 1) {
     logIfEnabled(LogLevel.INFO, verbose, 'Will download the most recent stream for the provided mint ID.');
+  } else if (cliArguments.length === 0) {
+    logIfEnabled(LogLevel.INFO, verbose, 'No mint ID provided, will prompt for existing video file.');
   }
 
   return true;

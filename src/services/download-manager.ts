@@ -411,6 +411,238 @@ export class DownloadManager {
   }
 
   /**
+   * Processes an existing video file (skips download, runs transcription, clip detection, and construction)
+   * @param videoFilePath Path to the existing video file
+   * @param mintId The mint ID extracted from filename
+   * @param options CLI options
+   * @param logger Logger instance for progress display
+   * @returns Promise resolving to processing results
+   */
+  async processExistingVideo(
+    videoFilePath: string,
+    mintId: string,
+    options: CLIOptions,
+    logger: Logger
+  ): Promise<{
+    success: boolean;
+    file?: string;
+    audioFile?: string;
+    transcription?: any;
+    clipDetection?: ClipDetectionResponse;
+    clipsFile?: string;
+    runDir?: string;
+    error?: string
+  }> {
+    const verbose = options.verbose || false;
+
+    logIfEnabled(LogLevel.INFO, verbose, `Processing existing video file: ${videoFilePath}`);
+
+    try {
+      // Verify the video file exists
+      if (!fs.existsSync(videoFilePath)) {
+        const error = `Video file not found: ${videoFilePath}`;
+        logger.error(error);
+        return { success: false, error };
+      }
+
+      logger.success(`Video file found: ${path.basename(videoFilePath)}`);
+
+      // Create directory structure matching Mode A: downloads/{mintId}/{timestamp}/raw/
+      const outputDir = options.output || this.config.defaultOutputDir;
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const mintDir = path.join(outputDir, mintId);
+      const runDir = path.join(mintDir, timestamp);
+      const rawDir = path.join(runDir, 'raw');
+      this.ensureOutputDirectory(rawDir, verbose);
+
+      logger.step(`Separating audio from video`, 1, 4);
+      
+      let separatedFiles;
+      try {
+        separatedFiles = await this.pumpFunService.separateAudio(videoFilePath, verbose);
+        logger.success(`Audio separation completed`);
+        logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully separated audio:`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📹 Video-only: ${separatedFiles.videoOnlyPath}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
+      } catch (separationError) {
+        const errorMessage = separationError instanceof Error ? separationError.message : 'Unknown separation error';
+        logger.error(`Audio separation failed: ${errorMessage}`);
+        logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to separate audio', separationError);
+        return { success: false, error: `Audio separation failed: ${errorMessage}` };
+      }
+
+      // Transcribe the audio file
+      logger.step(`Transcribing audio`, 2, 4);
+      
+      let transcriptionResult;
+      try {
+        transcriptionResult = await this.whisperService.transcribeAudio(separatedFiles.audioOnlyPath, {}, verbose);
+
+        logger.success(`Audio transcription completed`);
+        logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully transcribed audio`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📄 Duration: ${transcriptionResult.verbose.duration}s`);
+        logIfEnabled(LogLevel.INFO, verbose, `  🗣️  Language: ${transcriptionResult.verbose.language}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📝 Text length: ${transcriptionResult.verbose.text.length} characters`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
+
+        // Normalize word timestamps to video timeline
+        const { FFmpegService } = await import('../utils/ffmpeg');
+        const ffmpegService = new FFmpegService();
+        await ffmpegService.initialize();
+        
+        try {
+          const videoInfo = await ffmpegService.getVideoInfo(separatedFiles.videoOnlyPath);
+          const audioStartOffset = videoInfo.audioStart || 0;
+          
+          if (audioStartOffset > 0) {
+            logIfEnabled(LogLevel.DEBUG, verbose, `🔧 Normalizing word timestamps to video timeline`, {
+              audioStartOffset: audioStartOffset.toFixed(3),
+              wordCountBefore: transcriptionResult.verbose.words.length,
+              firstWordBefore: transcriptionResult.verbose.words[0] ? 
+                `"${transcriptionResult.verbose.words[0].word}" @ ${transcriptionResult.verbose.words[0].start.toFixed(3)}s` : 'none'
+            });
+            
+            // Adjust all word timestamps
+            transcriptionResult.verbose.words = transcriptionResult.verbose.words.map(word => ({
+              ...word,
+              start: word.start + audioStartOffset,
+              end: word.end + audioStartOffset
+            }));
+            
+            // Adjust segment timestamps if they exist
+            if (transcriptionResult.verbose.segments) {
+              transcriptionResult.verbose.segments = transcriptionResult.verbose.segments.map(segment => {
+                const adjustedSegment: any = {
+                  ...segment,
+                  start: segment.start + audioStartOffset,
+                  end: segment.end + audioStartOffset
+                };
+                
+                if (segment.words) {
+                  adjustedSegment.words = segment.words.map(word => ({
+                    ...word,
+                    start: word.start + audioStartOffset,
+                    end: word.end + audioStartOffset
+                  }));
+                }
+                
+                return adjustedSegment;
+              });
+            }
+            
+            const lastWord = transcriptionResult.verbose.words[transcriptionResult.verbose.words.length - 1];
+            logIfEnabled(LogLevel.DEBUG, verbose, `✅ Timeline normalization complete`, {
+              wordCount: transcriptionResult.verbose.words.length,
+              firstWordAfter: transcriptionResult.verbose.words[0] ? 
+                `"${transcriptionResult.verbose.words[0].word}" @ ${transcriptionResult.verbose.words[0].start.toFixed(3)}s` : 'none',
+              lastWordAfter: lastWord ? 
+                `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
+              note: 'All timestamps now in VIDEO timeline'
+            });
+          } else {
+            logIfEnabled(LogLevel.DEBUG, verbose, `ℹ️ No audio offset detected, timestamps already in video timeline`);
+          }
+        } catch (offsetError) {
+          logIfEnabled(LogLevel.WARN, verbose, `⚠️ Could not get audio offset, proceeding with original timestamps`, offsetError);
+        }
+
+        // Save transcription to file
+        const transcriptFilename = `transcript_${path.basename(videoFilePath, '.mp4')}_${timestamp}.json`;
+        const transcriptPath = path.join(rawDir, transcriptFilename);
+        try {
+          await fs.promises.writeFile(transcriptPath, JSON.stringify(transcriptionResult.verbose, null, 2));
+          logIfEnabled(LogLevel.INFO, verbose, `✅ Saved transcript: ${transcriptPath}`);
+        } catch (transcriptSaveError) {
+          logIfEnabled(LogLevel.WARN, verbose, `⚠️ Failed to save transcript file`, transcriptSaveError);
+        }
+      } catch (transcriptionError) {
+        const errorMessage = transcriptionError instanceof Error ? transcriptionError.message : 'Unknown transcription error';
+        logger.error(`Audio transcription failed: ${errorMessage}`);
+        logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to transcribe audio', transcriptionError);
+        return {
+          success: false,
+          file: separatedFiles.videoOnlyPath,
+          audioFile: separatedFiles.audioOnlyPath,
+          error: `Transcription failed: ${errorMessage}`
+        };
+      }
+
+      // Perform AI clip detection
+      let clipDetectionResults: ClipDetectionResponse | undefined;
+      let clipsFilePath: string | undefined;
+
+      logger.step(`Analyzing content for viral clips`, 3, 4);
+      try {
+        clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
+          transcriptionResult.verbose,
+          options.prompt || 'default',
+          verbose,
+          (progress) => {
+            logger.showProgress(
+              progress.chunk,
+              progress.total_chunks,
+              `AI Analysis (Chunk ${progress.chunk}/${progress.total_chunks}, ${progress.clips_found} clips found)`
+            );
+          }
+        );
+
+        logger.success(`AI clip detection completed`);
+        logIfEnabled(LogLevel.INFO, verbose, `🧠 Successfully analyzed content for viral clips`);
+        logIfEnabled(LogLevel.INFO, verbose, `  🎯 Total clips found: ${clipDetectionResults.total_clips_found}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  📊 Chunks processed: ${clipDetectionResults.stream_info.chunks_processed}`);
+        logIfEnabled(LogLevel.INFO, verbose, `  ⏱️  Stream duration: ${Math.round(clipDetectionResults.stream_info.duration)}s`);
+
+        if (clipDetectionResults.clips.length > 0) {
+          const avgVirality = Math.round(
+            clipDetectionResults.clips.reduce((sum, clip) => sum + clip.virality_score, 0) / clipDetectionResults.clips.length
+          );
+          logIfEnabled(LogLevel.INFO, verbose, `  📈 Average virality score: ${avgVirality}/100`);
+
+          const topClips = clipDetectionResults.clips.slice(0, 3);
+          logIfEnabled(LogLevel.INFO, verbose, `  🏆 Top clips:`);
+          topClips.forEach((clip, index) => {
+            logIfEnabled(LogLevel.INFO, verbose, `    ${index + 1}. ${clip.title} (${clip.virality_score}/100)`);
+          });
+        } else {
+          logIfEnabled(LogLevel.INFO, verbose, `  🤷 No viral-worthy clips detected in this stream`);
+        }
+
+        // Save clip detection results
+        const streamId = path.basename(videoFilePath, '.mp4');
+        clipsFilePath = await this.saveClipDetectionResults(
+          clipDetectionResults,
+          rawDir,
+          mintId,
+          streamId,
+          verbose
+        );
+
+      } catch (clipDetectionError) {
+        const errorMessage = clipDetectionError instanceof Error ? clipDetectionError.message : 'Unknown clip detection error';
+        logger.error(`AI clip detection failed: ${errorMessage}`);
+        logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to analyze content for clips', clipDetectionError);
+      }
+
+      return {
+        success: true,
+        file: separatedFiles.videoOnlyPath,
+        audioFile: separatedFiles.audioOnlyPath,
+        transcription: transcriptionResult,
+        runDir,
+        ...(clipDetectionResults && { clipDetection: clipDetectionResults }),
+        ...(clipsFilePath && { clipsFile: clipsFilePath })
+      };
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Video processing failed: ${errorMessage}`);
+      logIfEnabled(LogLevel.ERROR, verbose, '❌ Failed to process video', error);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
    * Main download orchestration method - downloads stream at specified index (default: newest)
    * @param mintId The SPL mint ID
    * @param options CLI options
