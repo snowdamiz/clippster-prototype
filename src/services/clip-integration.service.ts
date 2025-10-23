@@ -108,13 +108,14 @@ export class ClipIntegrationService {
     });
 
     try {
-      // Create organized directory structure
+      // Create organized directory structure (raw folder already exists from download)
+      const mintDir = path.join(baseOutputDirectory, mintId);
       const fileOrgConfig: FileOrganizationConfig = {
-        baseDirectory: baseOutputDirectory,
+        baseDirectory: baseOutputDirectory,  // Pass base directory, let createDirectoryStructure add mintId
         mintId,
         createSubdirectories: true,
         directoryStructure: {
-          source: 'source',
+          source: 'raw',  // Use 'raw' instead of 'source' to match existing structure
           clips: 'clips',
           metadata: 'metadata',
           assets: 'assets'
@@ -133,23 +134,9 @@ export class ClipIntegrationService {
         options.verbose
       );
 
-      // Move source files to organized directories
-      const sourceVideoName = path.basename(sourceVideoFile);
-      const organizedSourceVideo = path.join(directoryStructure.source, sourceVideoName);
-      if (sourceVideoFile !== organizedSourceVideo) {
-        await fs.promises.rename(sourceVideoFile, organizedSourceVideo);
-        sourceVideoFile = organizedSourceVideo; // Update reference
-      }
-
-      let sourceAudioFile: string | undefined;
-      if (options.inputAudioFile) {
-        const sourceAudioName = path.basename(options.inputAudioFile);
-        const organizedSourceAudio = path.join(directoryStructure.source, sourceAudioName);
-        if (options.inputAudioFile !== organizedSourceAudio) {
-          await fs.promises.rename(options.inputAudioFile, organizedSourceAudio);
-        }
-        sourceAudioFile = organizedSourceAudio;
-      }
+      // Files are already in the raw directory from download, so no need to move them
+      // Just reference them directly
+      let sourceAudioFile: string | undefined = options.inputAudioFile;
 
       // Filter clips based on options
       const filteredClips = this.filterClips(clipDetectionResult.clips, options);
@@ -366,16 +353,16 @@ export class ClipIntegrationService {
     baseDirectory: string
   ): Promise<ClipDetectionResponse | null> {
     try {
-      // Look for clips detection JSON file
-      const clipsDir = path.join(baseDirectory, mintId);
-      const files = await fs.promises.readdir(clipsDir);
+      // Look for clips detection JSON file in raw directory
+      const rawDir = path.join(baseDirectory, mintId, 'raw');
+      const files = await fs.promises.readdir(rawDir);
       const clipsFile = files.find(file => file.startsWith('clips_') && file.endsWith('.json'));
 
       if (!clipsFile) {
         return null;
       }
 
-      const clipsFilePath = path.join(clipsDir, clipsFile);
+      const clipsFilePath = path.join(rawDir, clipsFile);
       const clipsData = await fs.promises.readFile(clipsFilePath, 'utf8');
       return JSON.parse(clipsData) as ClipDetectionResponse;
 
@@ -395,8 +382,9 @@ export class ClipIntegrationService {
     baseDirectory: string
   ): Promise<string | null> {
     try {
-      const mintDir = path.join(baseDirectory, mintId);
-      const files = await fs.promises.readdir(mintDir);
+      // Look for video files in raw directory
+      const rawDir = path.join(baseDirectory, mintId, 'raw');
+      const files = await fs.promises.readdir(rawDir);
 
       // Look for video files
       const videoFiles = files.filter(file =>
@@ -408,7 +396,7 @@ export class ClipIntegrationService {
       }
 
       // Return the largest video file (likely the main stream)
-      const videoFilePaths = videoFiles.map(file => path.join(mintDir, file));
+      const videoFilePaths = videoFiles.map(file => path.join(rawDir, file));
       let largestFile: string | null = videoFilePaths[0] || null;
       let largestSize = 0;
 

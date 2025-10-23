@@ -179,10 +179,14 @@ export class DownloadManager {
       const shortStreamId = streamId.length > 20 ? streamId.slice(0, 20) + '...' : streamId;
       logger.success(`Found ${indexDescription}: ${shortStreamId}`);
 
-      // Generate filename and ensure output directory exists
+      // Create mint-specific directory structure
+      const mintDir = path.join(outputDir, mintId);
+      const rawDir = path.join(mintDir, 'raw');
+      this.ensureOutputDirectory(rawDir, verbose);
+
+      // Generate filename and path in raw directory
       const filename = this.generateFilename(stream, mintId, DownloadType.COMPLETE);
-      const outputPath = path.join(outputDir, filename);
-      this.ensureOutputDirectory(outputDir, verbose);
+      const outputPath = path.join(rawDir, filename);
 
       logger.step(`Downloading stream`, 1, 3);
 
@@ -236,9 +240,9 @@ export class DownloadManager {
           logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
           logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
 
-          // Save transcription to file for debugging
+          // Save transcription to file in raw directory
           const transcriptFilename = `transcript_${filename.replace('.mp4', '')}.json`;
-          const transcriptPath = path.join(outputDir, transcriptFilename);
+          const transcriptPath = path.join(rawDir, transcriptFilename);
           try {
             await fs.promises.writeFile(transcriptPath, JSON.stringify(transcriptionResult.verbose, null, 2));
             logIfEnabled(LogLevel.INFO, verbose, `✅ Saved transcript: ${transcriptPath}`);
@@ -287,10 +291,10 @@ export class DownloadManager {
               logIfEnabled(LogLevel.INFO, verbose, `  🤷 No viral-worthy clips detected in this stream`);
             }
 
-            // Save clip detection results to file
+            // Save clip detection results to file in raw directory
             clipsFilePath = await this.saveClipDetectionResults(
               clipDetectionResults,
-              outputDir,
+              rawDir,
               mintId,
               streamId,
               verbose

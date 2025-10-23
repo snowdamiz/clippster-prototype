@@ -81,7 +81,7 @@ export class FileOrganizationService {
 
     const structure: ExtendedDirectoryStructure = {
       base: mintDir,
-      source: path.join(mintDir, 'source'),
+      source: path.join(mintDir, config.directoryStructure.source || 'raw'),  // Use configured name, default to 'raw'
       clips: clipsDir,
       subtitles: path.join(assetsDir, 'subtitles'), // Use assets subfolder
       thumbnails: path.join(assetsDir, 'thumbnails'), // Use assets subfolder
