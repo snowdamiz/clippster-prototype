@@ -3,6 +3,8 @@
  */
 
 import { DetectedClip } from './clip-detection';
+import { SubtitleConfig } from './subtitles';
+import { Word } from './transcription';
 
 export interface ClipConstructionOptions {
   inputVideoFile: string;
@@ -23,6 +25,9 @@ export interface ClipConstructionOptions {
     position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   };
   verbose?: boolean;
+  // Subtitle options
+  subtitles?: SubtitleConfig;
+  transcriptionWords?: Word[]; // Word timestamps from Whisper
 }
 
 export interface ClipConstructionProgress {

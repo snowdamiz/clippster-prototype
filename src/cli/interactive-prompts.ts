@@ -158,6 +158,68 @@ export async function promptForOptions(): Promise<CLIOptions> {
     if (concurrentResponse.value && concurrentResponse.value !== 3) {
       options.maxConcurrentJobs = concurrentResponse.value;
     }
+
+    // Subtitle configuration
+    const subtitlesEnabled = await prompts({
+      type: 'confirm',
+      name: 'value',
+      message: 'Add word-by-word subtitles to clips?',
+      initial: false
+    });
+
+    if (subtitlesEnabled.value) {
+      // Subtitle style
+      const subtitleStyle = await prompts({
+        type: 'select',
+        name: 'value',
+        message: 'Subtitle style:',
+        choices: [
+          { title: 'TikTok (Bold, yellow highlight, centered)', value: 'tiktok' },
+          { title: 'YouTube (White text, black bar, bottom)', value: 'youtube' },
+          { title: 'Minimal (Simple white text with shadow)', value: 'minimal' }
+        ],
+        initial: 0
+      });
+
+      // Subtitle position
+      const subtitlePosition = await prompts({
+        type: 'select',
+        name: 'value',
+        message: 'Subtitle position:',
+        choices: [
+          { title: 'Top', value: 'top' },
+          { title: 'Center', value: 'center' },
+          { title: 'Bottom', value: 'bottom' }
+        ],
+        initial: 2 // Bottom by default
+      });
+
+      // Words per phrase
+      const wordsPerPhrase = await prompts({
+        type: 'number',
+        name: 'value',
+        message: 'Maximum words per subtitle (4-7 recommended):',
+        initial: 6,
+        min: 3,
+        max: 10
+      });
+
+      options.subtitles = {
+        enabled: true,
+        style: subtitleStyle.value,
+        position: subtitlePosition.value,
+        minWordsPerPhrase: 4,
+        maxWordsPerPhrase: wordsPerPhrase.value || 7
+      };
+    } else {
+      options.subtitles = { 
+        enabled: false,
+        style: 'minimal',
+        minWordsPerPhrase: 4,
+        maxWordsPerPhrase: 7,
+        position: 'bottom'
+      };
+    }
   }
 
   return options;

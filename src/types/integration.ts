@@ -4,6 +4,8 @@
 
 import { ClipConstructionOptions, ClipConstructionResult } from './clip-construction';
 import { ClipDetectionResponse } from './clip-detection';
+import { SubtitleConfig } from './subtitles';
+import { Word } from './transcription';
 
 export interface ClipIntegrationOptions {
   enabled: boolean;
@@ -14,6 +16,8 @@ export interface ClipIntegrationOptions {
   optimizeForPlatform: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
   autoCrop: boolean;
   verbose: boolean;
+  subtitles?: SubtitleConfig;
+  transcriptionWords?: Word[];
 }
 
 export interface ClipIntegrationResult {

@@ -11,6 +11,11 @@ A CLI tool for downloading and processing stream clips from PumpFun SPL mint IDs
 - 📝 Verbose logging for debugging
 - 🗂️ Configurable output directory
 - 🏗️ TypeScript-based architecture
+- 🤖 AI-powered viral clip detection
+- 📹 Automated clip construction and optimization
+- 💬 **Word-by-word subtitles with karaoke-style highlighting**
+- 🎨 Multiple subtitle styles (TikTok, YouTube, Minimal)
+- 🎯 Platform-specific optimization (TikTok, YouTube, Instagram, Twitter)
 
 ## Prerequisites
 

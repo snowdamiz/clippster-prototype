@@ -18,6 +18,8 @@ export interface CLIOptions {
   optimizeForPlatform?: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
   autoCrop?: boolean;
   maxConcurrentJobs?: number;
+  // Subtitle options
+  subtitles?: import('./subtitles').SubtitleConfig;
 }
 
 export interface ParsedArguments {
@@ -76,3 +78,4 @@ export * from './platform-optimization';
 export * from './integration';
 export * from './file-organization';
 export * from './utils';
+export * from './subtitles';

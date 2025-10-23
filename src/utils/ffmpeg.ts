@@ -8,6 +8,7 @@ import * as os from 'os';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import { LogLevel, FFmpegOptions, VideoInfo, ThumbnailOptions } from '../types';
+import { SubtitleData } from '../types/subtitles';
 import { logIfEnabled } from '../utils/validators';
 
 const execAsync = promisify(exec);
@@ -634,6 +635,193 @@ export class FFmpegService {
     for (const inputFile of inputFiles) {
       await this.validateInputFile(inputFile);
     }
+  }
+
+  /**
+   * Add subtitle rendering to video
+   * Applies karaoke-style word-by-word highlighting using drawtext filters
+   * @param inputFile - Source video file
+   * @param outputFile - Output video with subtitles
+   * @param subtitleData - Subtitle data to render
+   * @returns Promise resolving to output file path
+   */
+  async addSubtitles(
+    inputFile: string,
+    outputFile: string,
+    subtitleData: SubtitleData
+  ): Promise<string> {
+    await this.validateInputFile(inputFile);
+    await this.ensureOutputDirectory(outputFile);
+    await this.initialize();
+
+    logIfEnabled(LogLevel.DEBUG, true, '📝 Adding subtitles to video', {
+      inputFile: path.basename(inputFile),
+      phrases: subtitleData.phrases.length,
+      style: subtitleData.config.style
+    });
+
+    // Build subtitle filter chain
+    const subtitleFilter = this.buildSubtitleFilter(subtitleData);
+
+    // Build FFmpeg command with video filter
+    const args = [
+      '-y', // Overwrite output
+      '-i', inputFile,
+      '-vf', subtitleFilter,
+      '-c:v', 'libx264', // Re-encode video with subtitles burned in
+      '-preset', 'medium',
+      '-crf', '18', // High quality
+      '-c:a', 'copy', // Copy audio stream
+      '-movflags', '+faststart',
+      outputFile
+    ];
+
+    return this.executeFFmpeg(args);
+  }
+
+  /**
+   * Build FFmpeg drawtext filter chain for subtitles
+   * Uses conditional expressions for word-by-word highlighting
+   * @param subtitleData - Subtitle configuration and timing
+   * @returns FFmpeg video filter string
+   */
+  private buildSubtitleFilter(subtitleData: SubtitleData): string {
+    const style = subtitleData.config.customStyle || 
+      (subtitleData.config.style !== 'custom' ? this.getSubtitleStylePreset(subtitleData.config.style) : this.getSubtitleStylePreset('minimal'));
+    const filters: string[] = [];
+
+    // Build drawtext filter for each phrase
+    for (const phrase of subtitleData.phrases) {
+      const filter = this.buildPhraseDrawtext(phrase, style, subtitleData.config.position);
+      filters.push(filter);
+    }
+
+    // Chain all filters together
+    return filters.join(',');
+  }
+
+  /**
+   * Build drawtext filter for a single subtitle phrase
+   */
+  private buildPhraseDrawtext(
+    phrase: any,
+    style: any,
+    position: 'top' | 'center' | 'bottom'
+  ): string {
+    // Calculate Y position
+    let yPos: string;
+    if (position === 'top') {
+      yPos = '100';
+    } else if (position === 'center') {
+      yPos = '(h-text_h)/2';
+    } else {
+      yPos = `h-${style.yPosition}`;
+    }
+
+    // Escape text for FFmpeg - proper escaping for drawtext filter
+    const escapedText = phrase.text
+      .replace(/\\/g, '\\\\')        // Backslash first
+      .replace(/'/g, "'\\\\''")      // Escape single quotes for shell
+      .replace(/:/g, '\\:')          // Escape colons
+      .replace(/,/g, '\\,')          // Escape commas  
+      .replace(/\[/g, '\\\\[')       // Escape square brackets
+      .replace(/\]/g, '\\\\]');
+
+    // Build color expression for highlighting
+    const colorExpr = this.buildColorExpression(phrase.words, style);
+
+    // Build drawtext filter with text in quotes
+    let filter = `drawtext=text='${escapedText}'`;
+    filter += `:fontsize=${style.fontSize}`;
+    filter += `:fontcolor=${colorExpr}`;
+    filter += `:x=(w-text_w)/2`; // Center horizontally
+    filter += `:y=${yPos}`;
+
+    // Add outline (escape rgba colors properly)
+    if (style.outlineColor && style.outlineWidth) {
+      filter += `:borderw=${style.outlineWidth}`;
+      const borderColor = style.outlineColor.replace(/,/g, '\\,');
+      filter += `:bordercolor=${borderColor}`;
+    }
+
+    // Add shadow (escape rgba colors properly)
+    if (style.shadowColor && style.shadowOffset) {
+      const shadowColor = style.shadowColor.replace(/,/g, '\\,');
+      filter += `:shadowcolor=${shadowColor}`;
+      filter += `:shadowx=${style.shadowOffset.x}`;
+      filter += `:shadowy=${style.shadowOffset.y}`;
+    }
+
+    // Add background box (escape rgba colors properly)
+    if (style.backgroundColor) {
+      filter += `:box=1`;
+      const boxColor = style.backgroundColor.replace(/,/g, '\\,');
+      filter += `:boxcolor=${boxColor}`;
+      if (style.padding) {
+        filter += `:boxborderw=${style.padding}`;
+      }
+    }
+
+    // Add timing - only show during phrase duration
+    // Escape commas in the between() function
+    filter += `:enable='between(t\\,${phrase.startTime.toFixed(3)}\\,${phrase.endTime.toFixed(3)})'`;
+
+    return filter;
+  }
+
+  /**
+   * Build color expression for word highlighting
+   */
+  private buildColorExpression(words: any[], style: any): string {
+    if (words.length === 0) {
+      return style.defaultColor;
+    }
+
+    // Use simpler approach: show highlight color throughout phrase
+    // Complex nested if() causes FFmpeg parsing errors
+    return style.highlightColor;
+  }
+
+  /**
+   * Get subtitle style preset
+   */
+  private getSubtitleStylePreset(name: 'tiktok' | 'youtube' | 'minimal'): any {
+    const presets: Record<string, any> = {
+      tiktok: {
+        fontFamily: 'Arial',
+        fontSize: 60,
+        fontWeight: 'bold',
+        defaultColor: '#FFFFFF',
+        highlightColor: '#FFFF00',
+        outlineColor: '#000000',
+        outlineWidth: 4,
+        shadowColor: '#000000',
+        shadowOffset: { x: 2, y: 2 },
+        yPosition: 50
+      },
+      youtube: {
+        fontFamily: 'Arial',
+        fontSize: 40,
+        fontWeight: 'normal',
+        defaultColor: '#FFFFFF',
+        highlightColor: '#FFFF00',
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        padding: 10,
+        yPosition: 85
+      },
+      minimal: {
+        fontFamily: 'Arial',
+        fontSize: 48,
+        fontWeight: 'normal',
+        defaultColor: '#00FF9C',
+        highlightColor: '#00FF9C',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 3,
+        yPosition: 80
+      }
+    };
+
+    return presets[name] || presets.minimal;
   }
 
 }

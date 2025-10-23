@@ -184,6 +184,14 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
             maxConcurrentJobs: options.maxConcurrentJobs || 3,
             verbose: !!options.verbose
           };
+          
+          // Add optional properties if they exist
+          if (options.subtitles) {
+            clipIntegrationOptions.subtitles = options.subtitles;
+          }
+          if (transcription?.verbose?.words) {
+            clipIntegrationOptions.transcriptionWords = transcription.verbose.words;
+          }
 
           appLogger.step('🎬 Constructing video clips from AI detection results');
 

@@ -5,7 +5,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { FFmpegService } from '../utils/ffmpeg';
-import { DetectedClip } from '../types';
+import { DetectedClip, Word } from '../types';
+import { SubtitleService } from './subtitle.service';
 import {
   ClipConstructionOptions,
   ClipConstructionProgress,
@@ -24,11 +25,13 @@ import { ExtendedDirectoryStructure, FileOrganizationService } from '../utils/fi
 export class ClipConstructionService {
   private ffmpegService: FFmpegService;
   private fileOrganizer: FileOrganizationService;
+  private subtitleService: SubtitleService;
   private stats: ProcessingStats;
 
   constructor() {
     this.ffmpegService = new FFmpegService();
     this.fileOrganizer = new FileOrganizationService();
+    this.subtitleService = new SubtitleService();
     this.stats = {
       startTime: new Date(),
       clipsProcessed: 0,
@@ -269,6 +272,58 @@ export class ClipConstructionService {
     // Embed metadata if requested
     if (options.includeMetadata !== false) {
       await this.embedMetadata(videoFile, metadata, options);
+    }
+
+    // Generate and apply subtitles if enabled
+    if (options.subtitles?.enabled && options.transcriptionWords && options.transcriptionWords.length > 0) {
+      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '📝 Adding subtitles to clip', {
+        clipId,
+        wordsAvailable: options.transcriptionWords.length
+      });
+
+      try {
+        // Extract words for this clip's time range
+        const clipWords = this.extractWordsForSegment(clip.segments, options.transcriptionWords);
+        
+        if (clipWords.length > 0) {
+          // Generate subtitle data
+          const subtitleData = await this.subtitleService.generateSubtitleData(
+            clipWords,
+            options.subtitles,
+            clip.total_duration
+          );
+
+          // Adjust timestamps for video timeline
+          const audioStreamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
+          const clipStartTime = clip.segments[0]?.start_time || 0;
+          const adjustedSubtitles = this.subtitleService.adjustTimestamps(
+            subtitleData,
+            audioStreamOffset,
+            clipStartTime
+          );
+
+          // Create temporary file for subtitle rendering
+          const tempOutputFile = videoFile.replace('.mp4', '_with_subs.mp4');
+          
+          // Apply subtitles to video
+          await this.ffmpegService.addSubtitles(
+            videoFile,
+            tempOutputFile,
+            adjustedSubtitles
+          );
+
+          // Replace original with subtitled version
+          await fs.promises.unlink(videoFile);
+          await fs.promises.rename(tempOutputFile, videoFile);
+
+          logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '✅ Subtitles added successfully');
+        } else {
+          logIfEnabled(LogLevel.WARN, options.verbose !== false, '⚠️ No words found for clip time range, skipping subtitles');
+        }
+      } catch (error) {
+        logIfEnabled(LogLevel.ERROR, options.verbose !== false, '❌ Failed to add subtitles', error);
+        // Continue without subtitles rather than failing the entire clip
+      }
     }
 
     // Generate thumbnail if requested
@@ -605,6 +660,29 @@ export class ClipConstructionService {
     } else {
       return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
+  }
+
+  /**
+   * Extract word timestamps that fall within clip segments
+   * @param segments - Clip segments with timing
+   * @param allWords - All words from transcription
+   * @returns Words that fall within the segment time ranges
+   */
+  private extractWordsForSegment(
+    segments: ClipSegment[],
+    allWords: Word[]
+  ): Word[] {
+    const extractedWords: Word[] = [];
+
+    for (const segment of segments) {
+      // Find words that fall within this segment's time range
+      const segmentWords = allWords.filter(word => 
+        word.start >= segment.start_time && word.end <= segment.end_time
+      );
+      extractedWords.push(...segmentWords);
+    }
+
+    return extractedWords;
   }
 
   /**

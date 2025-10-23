@@ -194,6 +194,14 @@ export class ClipIntegrationService {
         autoCrop: options.autoCrop,
         verbose: options.verbose
       };
+      
+      // Add optional properties if they exist
+      if (options.subtitles) {
+        constructionOptions.subtitles = options.subtitles;
+      }
+      if (options.transcriptionWords) {
+        constructionOptions.transcriptionWords = options.transcriptionWords;
+      }
 
       // Only add inputAudioFile if it exists
       if (sourceAudioFile) {
