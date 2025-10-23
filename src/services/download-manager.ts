@@ -191,7 +191,7 @@ export class DownloadManager {
       const filename = this.generateFilename(stream, mintId, DownloadType.COMPLETE);
       const outputPath = path.join(rawDir, filename);
 
-      logger.step(`Downloading stream`, 1, 3);
+      logger.step(`Downloading stream`, 1, 5);
 
       // Add a time-based fallback progress display
       let progressShown = false;
@@ -217,12 +217,12 @@ export class DownloadManager {
       );
 
       clearInterval(progressFallback);
-      logger.completeProgress(`Download completed: ${filename}`);
+      logger.success(`Download completed`);
 
       logIfEnabled(LogLevel.INFO, verbose, `✅ Successfully downloaded: ${outputPath}`);
 
       // Separate audio from the downloaded video
-      logger.step(`Separating audio from video`, 2, 3);
+      logger.step(`Separating audio from video`, 2, 5);
       try {
         const separatedFiles = await this.pumpFunService.separateAudio(outputPath, verbose);
         logger.success(`Audio separation completed`);
@@ -231,7 +231,7 @@ export class DownloadManager {
         logIfEnabled(LogLevel.INFO, verbose, `  🎵 Audio-only: ${separatedFiles.audioOnlyPath}`);
 
         // Transcribe the audio file
-        logger.step(`Transcribing audio`, 3, 4);
+        logger.step(`Transcribing audio`, 3, 5);
         try {
           const transcriptionResult = await this.whisperService.transcribeAudio(separatedFiles.audioOnlyPath, {}, verbose);
 
@@ -320,7 +320,7 @@ export class DownloadManager {
           let clipDetectionResults: ClipDetectionResponse | undefined;
           let clipsFilePath: string | undefined;
 
-          logger.step(`Analyzing content for viral clips`, 4, 4);
+          logger.step(`Analyzing content for viral clips`, 4, 5);
           try {
             clipDetectionResults = await this.openRouterService.analyzeLongTranscript(
               transcriptionResult.verbose,

@@ -27,23 +27,11 @@ export class SubtitleService {
     clipDuration: number
   ): Promise<SubtitleData> {
     const lastWord = words[words.length - 1];
-    logIfEnabled(LogLevel.DEBUG, true, '📝 Generating subtitle data', {
-      wordCount: words.length,
-      clipDuration: clipDuration.toFixed(3),
-      firstWord: words[0] ? `"${words[0].word}" @ ${words[0].start.toFixed(3)}s` : 'none',
-      lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
-      minWords: config.minWordsPerPhrase,
-      maxWords: config.maxWordsPerPhrase
-    });
 
     // Group words into phrases
     const phrases = this.groupWordsIntoPhrases(words, config);
 
     const lastPhrase = phrases[phrases.length - 1];
-    logIfEnabled(LogLevel.DEBUG, true, `✅ Generated ${phrases.length} subtitle phrases`, {
-      firstPhrase: phrases[0] ? `${phrases[0].startTime.toFixed(2)}s - ${phrases[0].endTime.toFixed(2)}s: "${phrases[0].text.substring(0, 40)}..."` : 'none',
-      lastPhrase: lastPhrase ? `${lastPhrase.startTime.toFixed(2)}s - ${lastPhrase.endTime.toFixed(2)}s: "${lastPhrase.text.substring(0, 40)}..."` : 'none'
-    });
 
     return {
       phrases,
@@ -161,10 +149,6 @@ export class SubtitleService {
     audioStreamOffset: number,
     clipStartTime: number
   ): SubtitleData {
-    logIfEnabled(LogLevel.DEBUG, true, '⏱️ Subtitle timestamps already aligned to clip timeline', {
-      phraseCount: subtitleData.phrases.length,
-      note: 'No adjustment needed - words are already in clip timeline (0-based)'
-    });
 
     // Return subtitles as-is since they're already in the correct timeline
     return subtitleData;

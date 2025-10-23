@@ -45,8 +45,8 @@ export class ClipIntegrationService {
   private platformOptimizer: PlatformOptimizationService;
   private fileOrganizer: FileOrganizationService;
 
-  constructor() {
-    this.clipConstructionService = new ClipConstructionService();
+  constructor(verbose: boolean = false) {
+    this.clipConstructionService = new ClipConstructionService(verbose);
     this.batchProcessor = new BatchClipProcessor();
     this.platformOptimizer = new PlatformOptimizationService();
     this.fileOrganizer = new FileOrganizationService();

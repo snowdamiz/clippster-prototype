@@ -27,9 +27,11 @@ export class ClipConstructionService {
   private fileOrganizer: FileOrganizationService;
   private subtitleService: SubtitleService;
   private stats: ProcessingStats;
+  private verbose: boolean;
 
-  constructor() {
-    this.ffmpegService = new FFmpegService();
+  constructor(verbose: boolean = false) {
+    this.verbose = verbose;
+    this.ffmpegService = new FFmpegService(verbose);
     this.fileOrganizer = new FileOrganizationService();
     this.subtitleService = new SubtitleService();
     this.stats = {
@@ -100,6 +102,9 @@ export class ClipConstructionService {
       }
 
       try {
+        // Show progress for this clip
+        console.log(`🔄 Processing clip ${i + 1}/${clipsToProcess.length}: ${clip.title}`);
+        
         const startTime = Date.now();
         const constructedClip = await this.constructSingleClip(clip, sourceVideoFile, options, directoryStructure);
         const constructionTime = Date.now() - startTime;
@@ -111,13 +116,11 @@ export class ClipConstructionService {
         this.stats.totalDuration += constructedClip.duration;
         this.stats.totalFileSize += constructedClip.fileSize;
 
-        logIfEnabled(LogLevel.INFO, options.verbose !== false, `✅ Completed clip ${i + 1}/${clipsToProcess.length}`, {
-          clipId: clip.id,
-          title: clip.title,
-          duration: constructedClip.duration,
-          constructionTime: `${constructionTime}ms`,
-          fileSize: `${(constructedClip.fileSize / 1024 / 1024).toFixed(1)}MB`
-        });
+        console.log(`✅ \x1b[32mCompleted clip ${i + 1}/${clipsToProcess.length}: ${clip.title}\x1b[0m`);
+        
+        if (options.verbose) {
+          logIfEnabled(LogLevel.INFO, options.verbose, `   Duration: ${constructedClip.duration.toFixed(1)}s, Size: ${(constructedClip.fileSize / 1024 / 1024).toFixed(1)}MB, Time: ${constructionTime}ms`);
+        }
 
         if (onProgress) {
           onProgress({
@@ -723,12 +726,9 @@ export class ClipConstructionService {
         const firstWord = segmentWords[0];
         const lastWord = segmentWords[segmentWords.length - 1];
         
-        logIfEnabled(LogLevel.DEBUG, true, `🎯 Using validated word indices (RELIABLE)`, {
+        logIfEnabled(LogLevel.DEBUG, this.verbose, `🎯 Using validated word indices`, {
           indices: `${segment.wordIndices.start} to ${segment.wordIndices.end}`,
-          wordCount: segmentWords.length,
-          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
-          firstWord: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
-          lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none'
+          wordCount: segmentWords.length
         });
       } else {
         // FALLBACK: Timestamp filtering with generous tolerance
@@ -764,10 +764,8 @@ export class ClipConstructionService {
       // Use segment.start_time as the reference since all timestamps are now consistent (VIDEO timeline)
       const clipStartTime = segment.start_time;
       
-      logIfEnabled(LogLevel.DEBUG, true, `🔧 Mapping words to clip timeline`, {
-        clipStartTime: clipStartTime.toFixed(3),
-        wordCount: segmentWords.length,
-        mapping: 'word.start - clipStartTime => clip timeline position'
+      logIfEnabled(LogLevel.DEBUG, this.verbose, `🔧 Adjusting word timestamps for segment`, {
+        wordCount: segmentWords.length
       });
       
       const adjustedWords = segmentWords.map(word => ({
@@ -776,10 +774,10 @@ export class ClipConstructionService {
         end: word.end - clipStartTime
       }));
       
-      // Validation: Check that all words are within clip duration
-      const invalidWords = adjustedWords.filter(w => w.start < 0 || w.end < 0);
+      // Validation: Check that all words are within clip duration (only log if actually negative, not 0.0)
+      const invalidWords = adjustedWords.filter(w => w.start < -0.001 || w.end < -0.001);
       if (invalidWords.length > 0) {
-        logIfEnabled(LogLevel.ERROR, true, `❌ Found ${invalidWords.length} words with negative timestamps!`, {
+        logIfEnabled(LogLevel.ERROR, this.verbose, `❌ Found ${invalidWords.length} words with negative timestamps!`, {
           firstInvalid: `"${invalidWords[0]?.word}" @ ${invalidWords[0]?.start.toFixed(3)}s`,
           clipStartTime
         });
@@ -804,13 +802,9 @@ export class ClipConstructionService {
         const firstWord = segmentWords[0];
         const lastWord = segmentWords[segmentWords.length - 1];
         
-        logIfEnabled(LogLevel.DEBUG, true, `🎯 Segment ${i + 1}/${segments.length} using validated indices (RELIABLE)`, {
+        logIfEnabled(LogLevel.DEBUG, this.verbose, `🎯 Segment ${i + 1}/${segments.length} using validated indices`, {
           indices: `${segment.wordIndices.start} to ${segment.wordIndices.end}`,
-          wordsFound: segmentWords.length,
-          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
-          firstWordOriginal: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
-          lastWordOriginal: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none',
-          finalTimeRange: `${currentClipTime.toFixed(2)}s - ${(currentClipTime + segment.duration).toFixed(2)}s (clip timeline)`
+          wordsFound: segmentWords.length
         });
       } else {
         // FALLBACK: Timestamp filtering with generous tolerance
@@ -846,11 +840,8 @@ export class ClipConstructionService {
       // Use segment.start_time as the reference since all timestamps are now consistent (VIDEO timeline)
       const segmentStartTime = segment.start_time;
       
-      logIfEnabled(LogLevel.DEBUG, true, `🔧 Mapping segment ${i + 1} words to clip timeline`, {
-        segmentStartTime: segmentStartTime.toFixed(3),
-        currentClipTime: currentClipTime.toFixed(3),
-        wordCount: segmentWords.length,
-        mapping: `word.start - segmentStartTime + currentClipTime => clip position`
+      logIfEnabled(LogLevel.DEBUG, this.verbose, `🔧 Adjusting word timestamps for segment ${i + 1}`, {
+        wordCount: segmentWords.length
       });
       
       const adjustedWords = segmentWords.map(word => {
@@ -868,10 +859,10 @@ export class ClipConstructionService {
         };
       });
       
-      // Validation: Check for invalid timestamps
-      const invalidWords = adjustedWords.filter(w => w.start < 0 || w.end < 0 || w.start >= w.end);
+      // Validation: Check for invalid timestamps (only log if actually negative or invalid, not near-zero)
+      const invalidWords = adjustedWords.filter(w => w.start < -0.001 || w.end < -0.001 || w.start >= w.end);
       if (invalidWords.length > 0) {
-        logIfEnabled(LogLevel.ERROR, true, `❌ Segment ${i + 1} has ${invalidWords.length} words with invalid timestamps!`, {
+        logIfEnabled(LogLevel.ERROR, this.verbose, `❌ Segment ${i + 1} has ${invalidWords.length} words with invalid timestamps!`, {
           firstInvalid: invalidWords[0] ? `"${invalidWords[0].word}" @ ${invalidWords[0].start.toFixed(3)}s` : 'none'
         });
       }
@@ -885,13 +876,6 @@ export class ClipConstructionService {
     // Final validation
     if (extractedWords.length > 0) {
       const lastWord = extractedWords[extractedWords.length - 1];
-      logIfEnabled(LogLevel.DEBUG, true, `✅ Spliced clip word extraction complete`, {
-        totalWords: extractedWords.length,
-        segments: segments.length,
-        firstWord: `"${extractedWords[0]?.word}" @ ${extractedWords[0]?.start.toFixed(3)}s`,
-        lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
-        totalClipDuration: currentClipTime.toFixed(3)
-      });
     }
 
     return extractedWords;

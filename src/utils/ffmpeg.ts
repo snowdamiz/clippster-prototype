@@ -110,11 +110,13 @@ export const PLATFORM_PRESETS = {
 export class FFmpegService {
   private ffmpegPath: string;
   private ffprobePath: string;
+  private verbose: boolean;
 
-  constructor() {
+  constructor(verbose: boolean = false) {
     // Note: We'll make this async in a real implementation, but for now initialize as empty strings
     this.ffmpegPath = '';
     this.ffprobePath = '';
+    this.verbose = verbose;
   }
 
   /**
@@ -441,7 +443,9 @@ export class FFmpegService {
    */
   async executeFFmpeg(args: string[]): Promise<string> {
     // Log the full FFmpeg command for debugging
-    console.log(`[FFmpeg] Executing: ffmpeg ${args.join(' ')}`);
+    if (this.verbose) {
+      console.log(`[FFmpeg] Executing: ffmpeg ${args.join(' ')}`);
+    }
     
     return new Promise((resolve, reject) => {
       const process = spawn(this.ffmpegPath, args, { windowsHide: true });
@@ -654,7 +658,7 @@ export class FFmpegService {
     await this.ensureOutputDirectory(outputFile);
     await this.initialize();
 
-    logIfEnabled(LogLevel.DEBUG, true, '📝 Adding subtitles to video', {
+    logIfEnabled(LogLevel.DEBUG, this.verbose, '📝 Adding subtitles to video', {
       inputFile: path.basename(inputFile),
       phrases: subtitleData.phrases.length,
       style: subtitleData.config.style

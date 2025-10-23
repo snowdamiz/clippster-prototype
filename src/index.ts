@@ -193,9 +193,9 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
             clipIntegrationOptions.transcriptionWords = transcription.verbose.words;
           }
 
-          appLogger.step('🎬 Constructing video clips from AI detection results');
+          appLogger.step('🎬 Constructing video clips from AI detection results', 5, 5);
 
-          const clipIntegrationService = new ClipIntegrationService();
+          const clipIntegrationService = new ClipIntegrationService(!!options.verbose);
           // Use runDir if available, otherwise fall back to base directory
           const baseConstructionDir = runDir || (options.output || './downloads');
 
@@ -250,9 +250,9 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           }
         } else if (options.generateClipsOnly) {
           // Handle generate-clips-only mode
-          appLogger.step('🎬 Generating clips from existing data');
+          appLogger.step('🎬 Generating clips from existing data', 5, 5);
 
-          const clipIntegrationService = new ClipIntegrationService();
+          const clipIntegrationService = new ClipIntegrationService(!!options.verbose);
           const baseOutputDir = options.output || './downloads';
 
           // Try to load existing clip detection results
