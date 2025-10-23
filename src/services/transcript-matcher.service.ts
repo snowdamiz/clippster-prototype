@@ -153,8 +153,8 @@ export class TranscriptMatcherService {
       // Calculate match percentage
       const matchPercentage = totalWords > 0 ? matchCount / totalWords : 0;
 
-      // Require 90% exact match for "exact" matching
-      if (matchPercentage >= 0.9) {
+      // Require 85% exact match for "exact" matching (lowered from 90% for better recall)
+      if (matchPercentage >= 0.85) {
         const startWord = transcriptWords[i];
         const endWord = transcriptWords[i + targetWords.length - 1];
         
@@ -202,7 +202,7 @@ export class TranscriptMatcherService {
       // Calculate match score using sequence matching
       const score = this.calculateSequenceMatchScore(targetWords, windowWords);
       
-      if (score > bestScore && score >= 0.7) { // Require 70% match for fuzzy
+      if (score > bestScore && score >= 0.65) { // Require 65% match for fuzzy (lowered from 70% for better recall)
         bestScore = score;
         
         const startWord = transcriptWords[i];

@@ -26,9 +26,12 @@ export class SubtitleService {
     config: SubtitleConfig,
     clipDuration: number
   ): Promise<SubtitleData> {
+    const lastWord = words[words.length - 1];
     logIfEnabled(LogLevel.DEBUG, true, '📝 Generating subtitle data', {
       wordCount: words.length,
-      clipDuration,
+      clipDuration: clipDuration.toFixed(3),
+      firstWord: words[0] ? `"${words[0].word}" @ ${words[0].start.toFixed(3)}s` : 'none',
+      lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
       minWords: config.minWordsPerPhrase,
       maxWords: config.maxWordsPerPhrase
     });
@@ -36,7 +39,11 @@ export class SubtitleService {
     // Group words into phrases
     const phrases = this.groupWordsIntoPhrases(words, config);
 
-    logIfEnabled(LogLevel.DEBUG, true, `✅ Generated ${phrases.length} subtitle phrases`);
+    const lastPhrase = phrases[phrases.length - 1];
+    logIfEnabled(LogLevel.DEBUG, true, `✅ Generated ${phrases.length} subtitle phrases`, {
+      firstPhrase: phrases[0] ? `${phrases[0].startTime.toFixed(2)}s - ${phrases[0].endTime.toFixed(2)}s: "${phrases[0].text.substring(0, 40)}..."` : 'none',
+      lastPhrase: lastPhrase ? `${lastPhrase.startTime.toFixed(2)}s - ${lastPhrase.endTime.toFixed(2)}s: "${lastPhrase.text.substring(0, 40)}..."` : 'none'
+    });
 
     return {
       phrases,
@@ -142,37 +149,25 @@ export class SubtitleService {
 
   /**
    * Adjust subtitle timestamps to align with video timeline
-   * Accounts for audio stream offset and clip segment timing
+   * DEPRECATED: This method is no longer needed as word timestamps are already
+   * adjusted to clip timeline (0-based) during extraction.
+   * Kept for backward compatibility but does nothing.
    * @param subtitleData - Original subtitle data
-   * @param audioStreamOffset - Offset from audio stream start
-   * @param clipStartTime - When clip starts in original video
+   * @param audioStreamOffset - Offset from audio stream start (unused)
+   * @param clipStartTime - When clip starts in original video (unused)
    */
   adjustTimestamps(
     subtitleData: SubtitleData,
     audioStreamOffset: number,
     clipStartTime: number
   ): SubtitleData {
-    logIfEnabled(LogLevel.DEBUG, true, '⏱️ Adjusting subtitle timestamps', {
-      audioStreamOffset,
-      clipStartTime,
-      adjustment: audioStreamOffset - clipStartTime
+    logIfEnabled(LogLevel.DEBUG, true, '⏱️ Subtitle timestamps already aligned to clip timeline', {
+      phraseCount: subtitleData.phrases.length,
+      note: 'No adjustment needed - words are already in clip timeline (0-based)'
     });
 
-    const adjustedPhrases = subtitleData.phrases.map(phrase => ({
-      ...phrase,
-      startTime: phrase.startTime + audioStreamOffset - clipStartTime,
-      endTime: phrase.endTime + audioStreamOffset - clipStartTime,
-      words: phrase.words.map(word => ({
-        ...word,
-        startTime: word.startTime + audioStreamOffset - clipStartTime,
-        endTime: word.endTime + audioStreamOffset - clipStartTime
-      }))
-    }));
-
-    return {
-      ...subtitleData,
-      phrases: adjustedPhrases
-    };
+    // Return subtitles as-is since they're already in the correct timeline
+    return subtitleData;
   }
 
   /**
@@ -323,6 +318,8 @@ export class SubtitleService {
 
   /**
    * Adjust word timestamps for spliced clips
+   * DEPRECATED: This logic is now handled in ClipConstructionService.extractWordsForClipTimeline()
+   * Kept for backward compatibility.
    * @param words - Words from a segment
    * @param segmentStartInFinalVideo - When this segment appears in the final video
    * @param originalSegmentStart - Original start time of segment

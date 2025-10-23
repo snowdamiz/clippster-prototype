@@ -359,7 +359,7 @@ export class OpenRouterService {
             verbose
           );
 
-          if (match && match.confidence >= 0.7) {
+          if (match && match.confidence >= 0.65) {
             // Calculate actual duration from matched timestamps
             const actualDuration = match.endTime - match.startTime;
             
@@ -369,14 +369,17 @@ export class OpenRouterService {
               originalEnd: segment.end_time.toFixed(2),
               correctedEnd: match.endTime.toFixed(2),
               timeDiff: Math.abs(segment.start_time - match.startTime).toFixed(2),
-              confidence: match.confidence.toFixed(2)
+              confidence: match.confidence.toFixed(2),
+              durationDiff: Math.abs(segment.duration - actualDuration).toFixed(2),
+              wordIndices: `${match.wordIndices.start} to ${match.wordIndices.end}`
             });
 
             return {
               start_time: match.startTime,
               end_time: match.endTime,
               duration: actualDuration,
-              transcript: segment.transcript
+              transcript: segment.transcript,
+              wordIndices: match.wordIndices // Store the validated word indices!
             };
           } else {
             // If we can't find a match, log warning and keep original

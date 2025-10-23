@@ -45,6 +45,7 @@ export interface ClipSegment {
   end_time: number;
   duration: number;
   transcript: string;
+  wordIndices?: { start: number; end: number }; // Validated word indices from transcript matching
 }
 
 export interface ClipMetadata {
