@@ -282,25 +282,20 @@ export class ClipConstructionService {
       });
 
       try {
-        // Extract words for this clip's time range
-        const clipWords = this.extractWordsForSegment(clip.segments, options.transcriptionWords);
+        // Extract words for this clip's time range and adjust to clip timeline
+        const clipStartTime = clip.segments[0]?.start_time || 0;
+        const clipWords = this.extractWordsForClipTimeline(clip.segments, options.transcriptionWords, clipStartTime);
         
         if (clipWords.length > 0) {
-          // Generate subtitle data
+          // Generate subtitle data (words are already in clip timeline: 0 to clip.total_duration)
           const subtitleData = await this.subtitleService.generateSubtitleData(
             clipWords,
             options.subtitles,
             clip.total_duration
           );
 
-          // Adjust timestamps for video timeline
-          const audioStreamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
-          const clipStartTime = clip.segments[0]?.start_time || 0;
-          const adjustedSubtitles = this.subtitleService.adjustTimestamps(
-            subtitleData,
-            audioStreamOffset,
-            clipStartTime
-          );
+          // No further timestamp adjustment needed - words are already aligned to clip timeline
+          const adjustedSubtitles = subtitleData;
 
           // Create temporary file for subtitle rendering
           const tempOutputFile = videoFile.replace('.mp4', '_with_subs.mp4');
@@ -680,6 +675,39 @@ export class ClipConstructionService {
         word.start >= segment.start_time && word.end <= segment.end_time
       );
       extractedWords.push(...segmentWords);
+    }
+
+    return extractedWords;
+  }
+
+  /**
+   * Extract words for clip and adjust timestamps to clip's timeline (starting at 0)
+   * @param segments - Clip segments with timing
+   * @param allWords - All words from transcription
+   * @param clipStartTime - When the clip starts in the original video
+   * @returns Words with timestamps adjusted to clip timeline (0-based)
+   */
+  private extractWordsForClipTimeline(
+    segments: ClipSegment[],
+    allWords: Word[],
+    clipStartTime: number
+  ): Word[] {
+    const extractedWords: Word[] = [];
+
+    for (const segment of segments) {
+      // Find words that fall within this segment's time range
+      const segmentWords = allWords.filter(word => 
+        word.start >= segment.start_time && word.end <= segment.end_time
+      );
+      
+      // Adjust word timestamps to be relative to clip start (0-based)
+      const adjustedWords = segmentWords.map(word => ({
+        ...word,
+        start: word.start - clipStartTime,
+        end: word.end - clipStartTime
+      }));
+      
+      extractedWords.push(...adjustedWords);
     }
 
     return extractedWords;
