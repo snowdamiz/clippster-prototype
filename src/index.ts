@@ -180,6 +180,7 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
             ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
             includeThumbnails: true,
             optimizeForPlatform: options.optimizeForPlatform || 'auto',
+            generateAllPlatforms: options.generateAllPlatforms !== false,
             autoCrop: true,
             verbose: !!options.verbose
           };
@@ -210,9 +211,26 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           if (clipConstructionResult.success && clipConstructionResult.summary) {
             const { summary } = clipConstructionResult;
             const hasSubtitles = options.subtitles?.enabled;
-            const clipCountLabel = hasSubtitles 
-              ? `${summary.successful} clips (${summary.successful * 2} videos: original + subtitled)` 
-              : `${summary.successful} videos`;
+            const hasPlatformVersions = options.generateAllPlatforms !== false;
+            
+            let clipCountLabel: string;
+            if (hasPlatformVersions) {
+              if (hasSubtitles) {
+                // Base + 4 platform versions + subtitled base + 4 subtitled platform versions = 10 files per clip
+                // But YouTube and Twitter share 16:9, so actually 8 unique files
+                const totalFiles = summary.successful * 8;
+                clipCountLabel = `${summary.successful} clips (8 versions each: 4 platforms × 2 with/without subtitles)`;
+              } else {
+                // Base + 4 platform versions = 5 files per clip
+                const totalFiles = summary.successful * 5;
+                clipCountLabel = `${summary.successful} clips (5 versions each: base + 4 platforms)`;
+              }
+            } else {
+              clipCountLabel = hasSubtitles 
+                ? `${summary.successful} clips (${summary.successful * 2} videos: original + subtitled)` 
+                : `${summary.successful} videos`;
+            }
+            
             summaryItems.push(
               { label: 'Clips generated', value: clipCountLabel, emoji: '🎥' },
               { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }

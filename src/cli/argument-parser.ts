@@ -95,7 +95,7 @@ Interactive Configuration:
   • Clip format (always generates at highest quality)
   • Virality threshold
   • Thumbnails
-  • Platform optimization (TikTok, YouTube, Instagram, Twitter)
+  • Multi-platform generation (automatically creates versions for all platforms)
   • Auto-crop settings
   • Concurrent processing jobs
 
@@ -104,7 +104,7 @@ Features:
   🎤 AI-powered transcription with word-level timestamps
   🧠 AI clip detection for viral-worthy moments (always enabled)
   🎬 Automatic video clip construction with precise timestamps
-  📱 Platform-specific optimization (TikTok, YouTube, Instagram, Twitter)
+  📱 Multi-platform versions (TikTok 9:16, YouTube 16:9, Instagram 1:1, Twitter 16:9)
   🗂️ Organized file structure with metadata and summaries
   📊 Support for streams up to 8 hours with intelligent chunking
   ⚡ Batch processing with concurrent operations

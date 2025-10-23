@@ -103,23 +103,8 @@ export async function promptForOptions(): Promise<CLIOptions> {
     // Always generate thumbnails
     options.includeThumbnails = true;
 
-    // Platform optimization
-    const platformResponse = await prompts({
-      type: 'select',
-      name: 'value',
-      message: 'Optimize for platform:',
-      choices: [
-        { title: 'Auto', value: 'auto' },
-        { title: 'TikTok', value: 'tiktok' },
-        { title: 'YouTube', value: 'youtube' },
-        { title: 'Instagram', value: 'instagram' },
-        { title: 'Twitter', value: 'twitter' }
-      ],
-      initial: 0
-    });
-    options.optimizeForPlatform = platformResponse.value;
-
-    // Always enable auto-crop
+    // Generate all platform versions by default
+    options.generateAllPlatforms = true;
     options.autoCrop = true;
 
     // Max concurrent jobs will be calculated intelligently

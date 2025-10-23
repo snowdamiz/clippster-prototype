@@ -344,15 +344,73 @@ export class ClipConstructionService {
       }
     }
 
+    // Generate platform-specific versions if enabled
+    let platformVersions: import('../types/clip-construction').PlatformVersion[] | undefined;
+    let subtitledPlatformVersions: import('../types/clip-construction').PlatformVersion[] | undefined;
+    let totalFileSize = 0;
+    
+    if (options.generateAllPlatforms) {
+      const { PlatformOptimizationService } = require('./platform-optimization.service');
+      const platformOptimizer = new PlatformOptimizationService();
+      
+      // Generate platform versions for the base clip (without subtitles)
+      logIfEnabled(LogLevel.INFO, options.verbose !== false, '🎬 Generating platform versions for base clip', { clipId });
+      platformVersions = await platformOptimizer.generateAllPlatformVersions(
+        videoFile,
+        { id: clipId, duration: clip.total_duration, metadata } as any,
+        options.verbose !== false
+      );
+      
+      // Generate platform versions for the subtitled clip if it exists
+      if (subtitledVideoFile) {
+        logIfEnabled(LogLevel.INFO, options.verbose !== false, '🎬 Generating platform versions for subtitled clip', { clipId });
+        subtitledPlatformVersions = await platformOptimizer.generateAllPlatformVersions(
+          subtitledVideoFile,
+          { id: clipId, duration: clip.total_duration, metadata } as any,
+          options.verbose !== false
+        );
+      }
+      
+      // Calculate total file size of all versions
+      const baseStats = await fs.promises.stat(videoFile);
+      totalFileSize = baseStats.size;
+      
+      if (platformVersions && platformVersions.length > 0) {
+        totalFileSize += platformVersions.reduce((sum, v) => sum + v.fileSize, 0);
+      }
+      
+      if (subtitledVideoFile) {
+        const subtitledStats = await fs.promises.stat(subtitledVideoFile);
+        totalFileSize += subtitledStats.size;
+        
+        if (subtitledPlatformVersions && subtitledPlatformVersions.length > 0) {
+          totalFileSize += subtitledPlatformVersions.reduce((sum, v) => sum + v.fileSize, 0);
+        }
+      }
+      
+      const totalVersions = (platformVersions?.length || 0) + (subtitledPlatformVersions?.length || 0) + 1 + (subtitledVideoFile ? 1 : 0);
+      logIfEnabled(LogLevel.INFO, options.verbose !== false, '✅ Platform versions generated', {
+        clipId,
+        totalVersions,
+        baseVersions: platformVersions?.length || 0,
+        subtitledVersions: subtitledPlatformVersions?.length || 0,
+        totalSize: `${(totalFileSize / 1024 / 1024).toFixed(1)}MB`
+      });
+    } else {
+      // Get file size for single version
+      const stats = await fs.promises.stat(videoFile);
+      totalFileSize = stats.size;
+      if (subtitledVideoFile) {
+        const subtitledStats = await fs.promises.stat(subtitledVideoFile);
+        totalFileSize += subtitledStats.size;
+      }
+    }
+
     // Always generate thumbnail (from the original non-subtitled version)
     let thumbnailFile: string | undefined;
     if (options.includeThumbnails !== false) {
       thumbnailFile = await this.generateThumbnail(clip, videoFile, options, directoryStructure);
     }
-
-    // Get file size
-    const stats = await fs.promises.stat(videoFile);
-    const fileSize = stats.size;
 
     const result: ConstructedClip = {
       id: clipId,
@@ -360,7 +418,7 @@ export class ClipConstructionService {
       outputPath: videoFile,
       filename: path.basename(videoFile),
       duration: clip.total_duration,
-      fileSize,
+      fileSize: totalFileSize,
       format: options.format || 'mp4',
       quality: options.quality || 'medium',
       type: clip.type,
@@ -385,6 +443,14 @@ export class ClipConstructionService {
         original: path.basename(videoFile),
         subtitled: path.basename(subtitledVideoFile)
       });
+    }
+
+    if (platformVersions) {
+      result.platformVersions = platformVersions;
+    }
+    
+    if (subtitledPlatformVersions) {
+      result.subtitledPlatformVersions = subtitledPlatformVersions;
     }
 
     return result;

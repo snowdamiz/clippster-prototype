@@ -152,6 +152,131 @@ export class PlatformOptimizationService {
   }
 
   /**
+   * Generates optimized versions for all platforms
+   * @param baseClipPath Path to the base clip file
+   * @param clip The constructed clip data
+   * @param verbose Whether to enable verbose logging
+   * @returns Promise resolving to array of platform versions
+   */
+  async generateAllPlatformVersions(
+    baseClipPath: string,
+    clip: ConstructedClip,
+    verbose: boolean = false
+  ): Promise<import('../types/clip-construction').PlatformVersion[]> {
+    const platforms: Array<'tiktok' | 'youtube' | 'instagram' | 'twitter'> = ['tiktok', 'youtube', 'instagram', 'twitter'];
+    const platformVersions: import('../types/clip-construction').PlatformVersion[] = [];
+
+    logIfEnabled(LogLevel.INFO, verbose, '🎯 Generating versions for all platforms', {
+      clipId: clip.id,
+      platforms: platforms.join(', ')
+    });
+
+    const baseName = path.basename(baseClipPath, path.extname(baseClipPath));
+    const dirName = path.dirname(baseClipPath);
+    const ext = path.extname(baseClipPath);
+
+    // Track if we've generated 16:9 version (reusable for YouTube and Twitter)
+    let wideScreenVersion: import('../types/clip-construction').PlatformVersion | null = null;
+
+    for (const platform of platforms) {
+      try {
+        const constraints = this.getPlatformConstraints(platform);
+        
+        // Check if this platform uses same aspect ratio as already generated
+        if (platform === 'twitter' && wideScreenVersion) {
+          // Reuse YouTube's 16:9 version for Twitter
+          logIfEnabled(LogLevel.DEBUG, verbose, `📋 Reusing 16:9 version for ${platform}`);
+          platformVersions.push({
+            ...wideScreenVersion,
+            platform: 'twitter'
+          });
+          continue;
+        }
+
+        const outputPath = path.join(dirName, `${baseName}_${platform}${ext}`);
+
+        logIfEnabled(LogLevel.DEBUG, verbose, `🎬 Creating ${platform} version`, {
+          aspectRatio: constraints.aspectRatio,
+          resolution: constraints.resolution
+        });
+
+        // Generate platform-specific version with aspect ratio optimization
+        await this.createPlatformVersion(baseClipPath, outputPath, constraints, verbose);
+
+        const stats = await fs.promises.stat(outputPath);
+        const platformVersion: import('../types/clip-construction').PlatformVersion = {
+          platform,
+          outputPath,
+          filename: path.basename(outputPath),
+          fileSize: stats.size,
+          aspectRatio: constraints.aspectRatio,
+          resolution: constraints.resolution
+        };
+
+        platformVersions.push(platformVersion);
+
+        // Cache 16:9 version for reuse
+        if (constraints.aspectRatio === '16:9' && platform === 'youtube') {
+          wideScreenVersion = platformVersion;
+        }
+
+        logIfEnabled(LogLevel.DEBUG, verbose, `✅ ${platform} version created`, {
+          size: `${(stats.size / 1024 / 1024).toFixed(1)}MB`,
+          path: path.basename(outputPath)
+        });
+
+      } catch (error) {
+        logIfEnabled(LogLevel.ERROR, verbose, `❌ Failed to create ${platform} version: ${error}`);
+        // Continue with other platforms even if one fails
+      }
+    }
+
+    logIfEnabled(LogLevel.INFO, verbose, '✅ All platform versions generated', {
+      successful: platformVersions.length,
+      platforms: platformVersions.map(v => v.platform).join(', ')
+    });
+
+    return platformVersions;
+  }
+
+  /**
+   * Creates a platform-specific version of a clip
+   * @param inputPath Path to the source clip
+   * @param outputPath Path for the output file
+   * @param constraints Platform constraints
+   * @param verbose Whether to enable verbose logging
+   */
+  private async createPlatformVersion(
+    inputPath: string,
+    outputPath: string,
+    constraints: ExtendedPlatformConstraints,
+    verbose: boolean = false
+  ): Promise<void> {
+    const resolutionParts = constraints.resolution.split('x').map(Number);
+    const targetWidth = resolutionParts[0];
+    const targetHeight = resolutionParts[1];
+
+    if (targetWidth === undefined || targetHeight === undefined) {
+      throw new Error(`Invalid resolution format: ${constraints.resolution}`);
+    }
+
+    // FFmpeg filter for aspect ratio conversion with smart cropping
+    const filterGraph = this.buildAspectRatioFilter(targetWidth, targetHeight);
+
+    const args = [
+      '-y',
+      '-i', inputPath,
+      '-vf', filterGraph,
+      '-c:a', 'copy', // Keep audio unchanged
+      '-preset', 'medium',
+      '-crf', '23',
+      outputPath
+    ];
+
+    await this.ffmpegService.executeFFmpegPublic(args);
+  }
+
+  /**
    * Detects the optimal platform for a clip based on its characteristics
    * @param clip The clip to analyze
    * @returns Recommended platform

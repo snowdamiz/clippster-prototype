@@ -14,6 +14,7 @@ export interface ClipIntegrationOptions {
   format: 'mp4' | 'mov' | 'webm';
   includeThumbnails: boolean;
   optimizeForPlatform: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
+  generateAllPlatforms?: boolean;
   autoCrop: boolean;
   verbose: boolean;
   subtitles?: SubtitleConfig;

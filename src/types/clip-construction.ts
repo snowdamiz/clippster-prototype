@@ -18,6 +18,7 @@ export interface ClipConstructionOptions {
   parallelProcessing?: boolean;
   maxConcurrentJobs?: number;
   platform?: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
+  generateAllPlatforms?: boolean;
   autoCrop?: boolean;
   branding?: {
     logo?: string;
@@ -60,13 +61,24 @@ export interface ClipMetadata {
   createdAt: string;
 }
 
+export interface PlatformVersion {
+  platform: 'tiktok' | 'youtube' | 'instagram' | 'twitter';
+  outputPath: string;
+  filename: string;
+  fileSize: number;
+  aspectRatio: string;
+  resolution: string;
+  thumbnail?: string;
+  subtitledVersion?: string;
+}
+
 export interface ConstructedClip {
   id: string;
   sourceFile: string;
-  outputPath: string;
-  filename: string;
+  outputPath: string; // Primary/base output path
+  filename: string; // Primary/base filename
   duration: number;
-  fileSize: number;
+  fileSize: number; // Total file size of all versions
   format: string;
   quality: string;
   type: 'continuous' | 'spliced';
@@ -74,6 +86,8 @@ export interface ConstructedClip {
   metadata: ClipMetadata;
   thumbnail?: string; // Path to thumbnail file
   subtitledVersion?: string; // Path to subtitled version if generated
+  platformVersions?: PlatformVersion[]; // Platform-specific versions (without subtitles)
+  subtitledPlatformVersions?: PlatformVersion[]; // Platform-specific versions (with subtitles)
   constructionTime: number;
   success: boolean;
   error?: string;

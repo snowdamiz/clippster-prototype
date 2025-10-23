@@ -15,6 +15,7 @@ export interface CLIOptions {
   viralityThreshold?: number;
   includeThumbnails?: boolean;
   optimizeForPlatform?: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
+  generateAllPlatforms?: boolean;
   autoCrop?: boolean;
   maxConcurrentJobs?: number;
   // Subtitle options

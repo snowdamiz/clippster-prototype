@@ -197,6 +197,9 @@ export class ClipIntegrationService {
       };
       
       // Add optional properties if they exist
+      if (options.generateAllPlatforms !== undefined) {
+        constructionOptions.generateAllPlatforms = options.generateAllPlatforms;
+      }
       if (options.subtitles) {
         constructionOptions.subtitles = options.subtitles;
       }
