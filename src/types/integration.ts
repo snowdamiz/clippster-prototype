@@ -9,7 +9,7 @@ import { Word } from './transcription';
 
 export interface ClipIntegrationOptions {
   enabled: boolean;
-  maxConcurrentJobs: number;
+  maxConcurrentJobs?: number; // Optional - will be calculated intelligently if not provided
   quality: 'high' | 'medium' | 'low';
   format: 'mp4' | 'mov' | 'webm';
   includeThumbnails: boolean;

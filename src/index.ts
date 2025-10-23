@@ -175,13 +175,12 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           // Setup clip integration options
           const clipIntegrationOptions: ClipIntegrationOptions = {
             enabled: true,
-            quality: options.clipQuality || 'medium',
+            quality: 'high', // Always use highest quality
             format: options.clipFormat || 'mp4',
             ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
-            includeThumbnails: options.includeThumbnails || false,
+            includeThumbnails: true,
             optimizeForPlatform: options.optimizeForPlatform || 'auto',
-            autoCrop: options.autoCrop || false,
-            maxConcurrentJobs: options.maxConcurrentJobs || 3,
+            autoCrop: true,
             verbose: !!options.verbose
           };
           
@@ -247,68 +246,6 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
               emoji: '❌'
             });
             appLogger.warn(`Clip construction failed: ${clipConstructionResult.error}`);
-          }
-        } else if (options.generateClipsOnly) {
-          // Handle generate-clips-only mode
-          appLogger.step('🎬 Generating clips from existing data', 5, 5);
-
-          const clipIntegrationService = new ClipIntegrationService(!!options.verbose);
-          const baseOutputDir = options.output || './downloads';
-
-          // Try to load existing clip detection results
-          const existingClipDetection = await clipIntegrationService.loadExistingClipDetectionResults(mintId, baseOutputDir);
-          const existingVideoFile = await clipIntegrationService.findSourceVideoFile(mintId, baseOutputDir);
-
-          if (!existingClipDetection) {
-            appLogger.error('No existing clip detection results found. Run full processing first.');
-            process.exit(1);
-          }
-
-          if (!existingVideoFile) {
-            appLogger.error('No source video file found. Run full processing first.');
-            process.exit(1);
-          }
-
-          const clipIntegrationOptions: ClipIntegrationOptions = {
-            enabled: true,
-            quality: options.clipQuality || 'medium',
-            format: options.clipFormat || 'mp4',
-            ...(options.viralityThreshold !== undefined && { viralityThreshold: options.viralityThreshold }),
-            includeThumbnails: options.includeThumbnails || false,
-            optimizeForPlatform: options.optimizeForPlatform || 'auto',
-            autoCrop: options.autoCrop || false,
-            maxConcurrentJobs: options.maxConcurrentJobs || 3,
-            verbose: !!options.verbose
-          };
-
-          clipConstructionResult = await clipIntegrationService.integrateClipConstruction(
-            mintId,
-            existingClipDetection,
-            existingVideoFile,
-            undefined, // We don't have the audio file path in this mode
-            baseOutputDir,
-            clipIntegrationOptions
-          );
-
-          if (clipConstructionResult.success && clipConstructionResult.summary) {
-            const { summary } = clipConstructionResult;
-            summaryItems.push(
-              { label: 'Clips generated', value: `${summary.successful} videos`, emoji: '🎥' },
-              { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }
-            );
-
-            if (clipConstructionResult.outputPath) {
-              summaryItems.push({
-                label: 'Clips directory',
-                value: clipConstructionResult.outputPath.split(/[/\\]/).pop() || clipConstructionResult.outputPath,
-                emoji: '📁'
-              });
-            }
-
-            appLogger.success(`✅ Successfully generated ${summary.successful} video clips from existing data`);
-          } else {
-            appLogger.error(`Clip construction failed: ${clipConstructionResult.error}`);
-            process.exit(1);
           }
         }
 

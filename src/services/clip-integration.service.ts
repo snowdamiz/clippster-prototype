@@ -17,6 +17,7 @@ import {
   ClipConstructionResult
 } from '../types/clip-construction';
 import { logIfEnabled } from '../utils/validators';
+import { calculateOptimalConcurrency, getSystemResourceInfo } from '../utils/concurrency';
 
 // Extended interfaces for integration-specific functionality
 export interface ExtendedClipIntegrationOptions extends ClipIntegrationOptions {
@@ -187,9 +188,9 @@ export class ClipIntegrationService {
       const constructionOptions: ClipConstructionOptions = {
         inputVideoFile: sourceVideoFile,
         outputDirectory: directoryStructure.base, // Use base directory, construction service will handle subdirectories
-        quality: options.quality,
+        quality: 'high', // Always use highest quality
         format: options.format,
-        includeThumbnails: options.includeThumbnails,
+        includeThumbnails: options.includeThumbnails !== false, // Always generate thumbnails unless explicitly disabled
         platform: options.optimizeForPlatform,
         autoCrop: options.autoCrop,
         verbose: options.verbose
@@ -208,9 +209,28 @@ export class ClipIntegrationService {
         constructionOptions.inputAudioFile = sourceAudioFile;
       }
 
+      // Calculate optimal concurrency based on system resources
+      // Quality is always 'high'
+      const optimalConcurrency = options.maxConcurrentJobs || calculateOptimalConcurrency(
+        filteredClips.length,
+        'high'
+      );
+
+      if (options.verbose) {
+        const systemInfo = getSystemResourceInfo();
+        logIfEnabled(LogLevel.INFO, options.verbose, '🖥️ System resources and concurrency', {
+          cpus: systemInfo.cpuCount,
+          totalMemory: systemInfo.totalMemoryGB,
+          freeMemory: systemInfo.freeMemoryGB,
+          platform: systemInfo.platform,
+          calculatedConcurrency: optimalConcurrency,
+          clipsToProcess: filteredClips.length
+        });
+      }
+
       // Setup batch processing options
       const batchOptions = {
-        maxConcurrentClips: options.maxConcurrentJobs,
+        maxConcurrentClips: optimalConcurrency,
         prioritizeByVirality: true,
         skipLowVirality: true,
         viralityThreshold: options.viralityThreshold || 0,

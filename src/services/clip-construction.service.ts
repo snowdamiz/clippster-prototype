@@ -341,9 +341,9 @@ export class ClipConstructionService {
       }
     }
 
-    // Generate thumbnail if requested
+    // Always generate thumbnail
     let thumbnailFile: string | undefined;
-    if (options.includeThumbnails) {
+    if (options.includeThumbnails !== false) {
       thumbnailFile = await this.generateThumbnail(clip, videoFile, options, directoryStructure);
     }
 
@@ -483,12 +483,16 @@ export class ClipConstructionService {
 
     await fs.promises.mkdir(path.dirname(thumbnailPath), { recursive: true });
 
-    // Use the middle of the clip for thumbnail
-    const firstSegment = clip.segments[0];
-    if (!firstSegment) {
-      throw new Error('Clip has no segments for thumbnail generation');
-    }
-    const thumbnailTime = firstSegment.start_time + (clip.total_duration / 2);
+    // Use the middle of the CLIP for thumbnail (not the source video)
+    // The videoFile is the already-extracted clip, so we need a timestamp relative to the clip (0 to clip.total_duration)
+    const thumbnailTime = clip.total_duration / 2;
+
+    logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '📸 Generating thumbnail', {
+      clipFile: path.basename(videoFile),
+      thumbnailTime: thumbnailTime.toFixed(2),
+      clipDuration: clip.total_duration.toFixed(2),
+      outputPath: thumbnailPath
+    });
 
     await this.ffmpegService.generateThumbnail(
       videoFile,
@@ -501,6 +505,10 @@ export class ClipConstructionService {
         format: 'jpg'
       }
     );
+
+    logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '✅ Thumbnail generated successfully', {
+      path: thumbnailPath
+    });
 
     return thumbnailPath;
   }

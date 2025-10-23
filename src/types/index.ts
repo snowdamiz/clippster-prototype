@@ -10,7 +10,6 @@ export interface CLIOptions {
   index?: number;
   prompt?: string;
   // Clip construction options
-  generateClipsOnly?: boolean;
   clipQuality?: 'high' | 'medium' | 'low';
   clipFormat?: 'mp4' | 'mov' | 'webm';
   viralityThreshold?: number;

@@ -73,18 +73,6 @@ export async function promptForOptions(): Promise<CLIOptions> {
       console.warn('Warning: No prompts found in ./prompts directory. Using default.');
     }
 
-    // Generate clips only
-    const generateClipsOnlyResponse = await prompts({
-      type: 'confirm',
-      name: 'value',
-      message: 'Only generate clips from existing data (skip download)?',
-      initial: false
-    });
-    options.generateClipsOnly = generateClipsOnlyResponse.value;
-
-    // Always use highest quality
-    options.clipQuality = 'high';
-
     // Clip format
     const formatResponse = await prompts({
       type: 'select',
@@ -112,14 +100,8 @@ export async function promptForOptions(): Promise<CLIOptions> {
       options.viralityThreshold = viralityResponse.value;
     }
 
-    // Include thumbnails
-    const thumbnailsResponse = await prompts({
-      type: 'confirm',
-      name: 'value',
-      message: 'Generate thumbnails for clips?',
-      initial: false
-    });
-    options.includeThumbnails = thumbnailsResponse.value;
+    // Always generate thumbnails
+    options.includeThumbnails = true;
 
     // Platform optimization
     const platformResponse = await prompts({
@@ -137,27 +119,11 @@ export async function promptForOptions(): Promise<CLIOptions> {
     });
     options.optimizeForPlatform = platformResponse.value;
 
-    // Auto crop
-    const autoCropResponse = await prompts({
-      type: 'confirm',
-      name: 'value',
-      message: 'Auto-crop for platform aspect ratio?',
-      initial: false
-    });
-    options.autoCrop = autoCropResponse.value;
+    // Always enable auto-crop
+    options.autoCrop = true;
 
-    // Max concurrent jobs
-    const concurrentResponse = await prompts({
-      type: 'number',
-      name: 'value',
-      message: 'Maximum concurrent processing jobs (1-10):',
-      initial: 3,
-      min: 1,
-      max: 10
-    });
-    if (concurrentResponse.value && concurrentResponse.value !== 3) {
-      options.maxConcurrentJobs = concurrentResponse.value;
-    }
+    // Max concurrent jobs will be calculated intelligently
+    // No need to set it here
 
     // Subtitle configuration
     const subtitlesEnabled = await prompts({
