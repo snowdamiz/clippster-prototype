@@ -94,7 +94,7 @@ Interactive Configuration:
   • AI prompt selection for clip detection (always enabled)
   • Clip format (always generates at highest quality)
   • Virality threshold
-  • Subtitles and thumbnails
+  • Thumbnails
   • Platform optimization (TikTok, YouTube, Instagram, Twitter)
   • Auto-crop settings
   • Concurrent processing jobs

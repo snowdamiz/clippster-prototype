@@ -123,7 +123,6 @@ export class ClipIntegrationService {
         base: runDir,
         source: rawDir,
         clips: clipsDir,
-        subtitles: path.join(assetsDir, 'subtitles'),
         thumbnails: path.join(assetsDir, 'thumbnails'),
         metadata: metadataDir,
         assets: assetsDir,
@@ -131,7 +130,6 @@ export class ClipIntegrationService {
         continuous: path.join(clipsDir, 'continuous'),
         spliced: path.join(clipsDir, 'spliced'),
         assetsThumbnails: path.join(assetsDir, 'thumbnails'),
-        assetsSubtitles: path.join(assetsDir, 'subtitles'),
         assetsTemp: path.join(assetsDir, 'temp')
       };
 
@@ -143,7 +141,6 @@ export class ClipIntegrationService {
         logsDir,
         path.join(clipsDir, 'continuous'),
         path.join(clipsDir, 'spliced'),
-        path.join(assetsDir, 'subtitles'),
         path.join(assetsDir, 'thumbnails'),
         path.join(assetsDir, 'temp')
       ];
@@ -192,7 +189,6 @@ export class ClipIntegrationService {
         outputDirectory: directoryStructure.base, // Use base directory, construction service will handle subdirectories
         quality: options.quality,
         format: options.format,
-        includeSubtitles: options.includeSubtitles,
         includeThumbnails: options.includeThumbnails,
         platform: options.optimizeForPlatform,
         autoCrop: options.autoCrop,

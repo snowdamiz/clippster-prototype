@@ -112,15 +112,6 @@ export async function promptForOptions(): Promise<CLIOptions> {
       options.viralityThreshold = viralityResponse.value;
     }
 
-    // Include subtitles
-    const subtitlesResponse = await prompts({
-      type: 'confirm',
-      name: 'value',
-      message: 'Include subtitles in clips?',
-      initial: false
-    });
-    options.includeSubtitles = subtitlesResponse.value;
-
     // Include thumbnails
     const thumbnailsResponse = await prompts({
       type: 'confirm',

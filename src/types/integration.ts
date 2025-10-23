@@ -10,7 +10,6 @@ export interface ClipIntegrationOptions {
   maxConcurrentJobs: number;
   quality: 'high' | 'medium' | 'low';
   format: 'mp4' | 'mov' | 'webm';
-  includeSubtitles: boolean;
   includeThumbnails: boolean;
   optimizeForPlatform: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
   autoCrop: boolean;

@@ -11,7 +11,6 @@ export interface ClipConstructionOptions {
   format?: 'mp4' | 'mov' | 'webm';
   quality?: 'high' | 'medium' | 'low';
   maxClipDuration?: number;
-  includeSubtitles?: boolean;
   includeThumbnails?: boolean;
   includeMetadata?: boolean;
   parallelProcessing?: boolean;
@@ -67,7 +66,6 @@ export interface ConstructedClip {
   type: 'continuous' | 'spliced';
   segments: ClipSegment[];
   metadata: ClipMetadata;
-  subtitles?: string; // Path to subtitle file
   thumbnail?: string; // Path to thumbnail file
   constructionTime: number;
   success: boolean;
@@ -121,7 +119,7 @@ export interface ClipConstructionResult {
 }
 
 // Re-export from utils to avoid duplication
-export type { SubtitleOptions, ThumbnailOptions } from './utils';
+export type { ThumbnailOptions } from './utils';
 
 export interface ProcessingStats {
   startTime: Date;

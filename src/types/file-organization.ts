@@ -20,13 +20,6 @@ export interface FileManifest {
     format: string;
     createdAt: string;
   }>;
-  subtitles: Array<{
-    id: string;
-    filename: string;
-    path: string;
-    language: string;
-    format: string;
-  }>;
   thumbnails: Array<{
     id: string;
     filename: string;

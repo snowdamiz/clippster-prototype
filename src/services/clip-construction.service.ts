@@ -271,22 +271,6 @@ export class ClipConstructionService {
       await this.embedMetadata(videoFile, metadata, options);
     }
 
-    // Generate subtitles if requested
-    let subtitleFile: string | undefined;
-    if (options.includeSubtitles && clip.combined_transcript) {
-      subtitleFile = await this.generateSubtitles(clip, options, directoryStructure);
-      if (options.includeSubtitles === true) {
-        // Burn subtitles into video using temporary file
-        const tempFile = path.join(
-          path.dirname(outputPath),
-          `temp_${Date.now()}_${path.basename(outputPath)}`
-        );
-        await this.ffmpegService.burnSubtitles(videoFile, subtitleFile, tempFile);
-        fs.unlinkSync(videoFile);
-        fs.renameSync(tempFile, videoFile);
-      }
-    }
-
     // Generate thumbnail if requested
     let thumbnailFile: string | undefined;
     if (options.includeThumbnails) {
@@ -318,9 +302,6 @@ export class ClipConstructionService {
       success: true
     };
 
-    if (subtitleFile) {
-      result.subtitles = subtitleFile;
-    }
     if (thumbnailFile) {
       result.thumbnail = thumbnailFile;
     }
@@ -416,56 +397,6 @@ export class ClipConstructionService {
       // If we can't get the info, assume no offset
       return 0;
     }
-  }
-
-  /**
-   * Generates subtitles for a clip
-   * @param clip The detected clip
-   * @param options Construction options
-   * @returns Promise resolving to subtitle file path
-   */
-  private async generateSubtitles(
-    clip: DetectedClip,
-    options: ClipConstructionOptions,
-    directoryStructure: ExtendedDirectoryStructure
-  ): Promise<string> {
-    const subtitlePath = path.join(
-      directoryStructure.assetsSubtitles,
-      `${path.basename(clip.filename, '.mp4')}.srt`
-    );
-
-    await fs.promises.mkdir(path.dirname(subtitlePath), { recursive: true });
-
-    let subtitleContent = '';
-    let subtitleIndex = 1;
-
-    if (clip.type === 'continuous' && clip.segments.length === 1) {
-      // Single subtitle entry for continuous clips
-      const segment = clip.segments[0];
-      if (!segment) {
-        throw new Error('No segment data available for subtitle generation');
-      }
-      const startTime = this.formatSRTTime(segment.start_time);
-      const endTime = this.formatSRTTime(segment.end_time);
-
-      subtitleContent += `${subtitleIndex}\n`;
-      subtitleContent += `${startTime} --> ${endTime}\n`;
-      subtitleContent += `${segment.transcript}\n\n`;
-    } else {
-      // Multiple subtitle entries for spliced clips
-      clip.segments.forEach(segment => {
-        const startTime = this.formatSRTTime(segment.start_time);
-        const endTime = this.formatSRTTime(segment.end_time);
-
-        subtitleContent += `${subtitleIndex}\n`;
-        subtitleContent += `${startTime} --> ${endTime}\n`;
-        subtitleContent += `${segment.transcript}\n\n`;
-        subtitleIndex++;
-      });
-    }
-
-    await fs.promises.writeFile(subtitlePath, subtitleContent.trim());
-    return subtitlePath;
   }
 
   /**
@@ -657,20 +588,6 @@ export class ClipConstructionService {
     } catch (error) {
       throw new Error(`Cannot create output directory: ${error}`);
     }
-  }
-
-  /**
-   * Formats time in seconds to SRT time format (HH:MM:SS,mmm)
-   * @param seconds Time in seconds
-   * @returns Formatted SRT time string
-   */
-  private formatSRTTime(seconds: number): string {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = Math.floor(seconds % 60);
-    const milliseconds = Math.floor((seconds % 1) * 1000);
-
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')},${milliseconds.toString().padStart(3, '0')}`;
   }
 
   /**

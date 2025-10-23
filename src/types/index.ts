@@ -14,7 +14,6 @@ export interface CLIOptions {
   clipQuality?: 'high' | 'medium' | 'low';
   clipFormat?: 'mp4' | 'mov' | 'webm';
   viralityThreshold?: number;
-  includeSubtitles?: boolean;
   includeThumbnails?: boolean;
   optimizeForPlatform?: 'tiktok' | 'youtube' | 'instagram' | 'twitter' | 'auto';
   autoCrop?: boolean;

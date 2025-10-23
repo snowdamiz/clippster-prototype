@@ -246,7 +246,6 @@ export class PlatformOptimizationService {
         supportedFormats: ['mp4', 'mov'],
         contentGuidelines: [
           'Auto-play in feed',
-          'Subtitles recommended (no sound default)',
           'Clear thumbnails important',
           'Mobile viewing prioritized'
         ]

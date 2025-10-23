@@ -39,23 +39,6 @@ export interface ThumbnailOptions {
   format?: 'jpg' | 'png';
 }
 
-export interface SubtitleOptions {
-  language: string;
-  style?: {
-    fontName?: string;
-    fontSize?: number;
-    fontColor?: string;
-    backgroundColor?: string;
-    outlineColor?: string;
-    outlineWidth?: number;
-    shadowColor?: string;
-    shadowX?: number;
-    shadowY?: number;
-    alignment?: number;
-    position?: string;
-  };
-}
-
 // Chunking types
 export interface ChunkingConfig {
   chunkSize: number;

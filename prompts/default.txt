@@ -3,7 +3,7 @@ Analyze this {CHUNK_DURATION_MINUTE}-minute stream transcript chunk and identify
 Requirements:
 - Find ALL genuinely clip-worthy moments - quality over quantity
 - Minimum 15 seconds total duration, maximum 120 seconds total per clip
-- Include only moments with real viral potential: strong emotions, humor, insights, controversy, predictions, technical breakdowns, call-outs, celebrations, frustrations
+- Include only moments with real viral potential: strong emotions, humor, insights, controversy, predictions, technical breakdowns, call-outs, celebrations, frustrations, cringe, outlandish
 - Look for subtle moments too: facial reactions, voice changes, audience interactions
 - If the content is boring or low-quality, return 0-2 clips rather than forcing recommendations
 - If the content is amazing and packed with moments, return 20+ clips

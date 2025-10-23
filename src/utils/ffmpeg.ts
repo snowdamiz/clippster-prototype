@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { spawn, exec } from 'child_process';
 import { promisify } from 'util';
-import { LogLevel, FFmpegOptions, VideoInfo, ThumbnailOptions, SubtitleOptions } from '../types';
+import { LogLevel, FFmpegOptions, VideoInfo, ThumbnailOptions } from '../types';
 import { logIfEnabled } from '../utils/validators';
 
 const execAsync = promisify(exec);
@@ -32,24 +32,6 @@ export interface ExtendedVideoInfo extends VideoInfo {
 
 // Use the extended ThumbnailOptions that already has timestamp required
 export type FFmpegThumbnailOptions = ThumbnailOptions;
-
-// Use centralized SubtitleOptions
-export type FFmpegSubtitleOptions = SubtitleOptions;
-
-// Additional FFmpeg-specific subtitle styling options
-export interface ExtendedSubtitleStyle {
-  fontName?: string;
-  fontSize?: number;
-  fontColor?: string;
-  backgroundColor?: string;
-  outlineColor?: string;
-  outlineWidth?: number;
-  shadowColor?: string;
-  shadowX?: number;
-  shadowY?: number;
-  alignment?: number;
-  position?: string;
-}
 
 export const QUALITY_PRESETS = {
   high: {
@@ -345,43 +327,6 @@ export class FFmpegService {
       '-q:v', Math.min(3, Math.max(1, 6 - quality)).toString(),
       '-s', `${width}x${height}`,
       '-pix_fmt', 'yuvj420p',
-      outputFile
-    ];
-
-    return this.executeFFmpeg(args);
-  }
-
-  /**
-   * Burns subtitles into a video file
-   * @param inputFile Input video file
-   * @param subtitleFile Subtitle file (SRT format)
-   * @param outputFile Output video file
-   * @param options Subtitle styling options
-   * @returns Promise resolving to the output file path
-   */
-  async burnSubtitles(
-    inputFile: string,
-    subtitleFile: string,
-    outputFile: string,
-    options: SubtitleOptions = { language: 'en' }
-  ): Promise<string> {
-    await this.validateInputFile(inputFile);
-    await this.validateInputFile(subtitleFile);
-    await this.ensureOutputDirectory(outputFile);
-    await this.initialize(); // Ensure FFmpeg is initialized
-
-    const style = options.style || {};
-    const subtitleFilter = this.buildSubtitleFilter(style, subtitleFile);
-
-    const args = [
-      '-y',
-      '-i', inputFile,
-      '-i', subtitleFile,
-      '-c:v', 'libx264',
-      '-c:a', 'copy',
-      '-preset', 'medium',
-      '-crf', '23',
-      '-vf', subtitleFilter,
       outputFile
     ];
 
@@ -691,32 +636,4 @@ export class FFmpegService {
     }
   }
 
-  /**
-   * Builds subtitle filter string for FFmpeg
-   * @param style Subtitle styling options
-   * @param subtitleFile Path to subtitle file
-   * @returns FFmpeg subtitle filter string
-   */
-  private buildSubtitleFilter(style: SubtitleOptions['style'], subtitleFile: string): string {
-    const filters = [];
-
-    if (style?.fontName) filters.push(`fontname=${style.fontName}`);
-    if (style?.fontSize) filters.push(`fontsize=${style.fontSize}`);
-    if (style?.fontColor) filters.push(`fontcolor=${style.fontColor}`);
-    if (style?.backgroundColor) filters.push(`bgcolor=${style.backgroundColor}`);
-    if (style?.outlineColor) filters.push(`outlinecolor=${style.outlineColor}`);
-    if (style?.outlineWidth) filters.push(`outline=${style.outlineWidth}`);
-    if (style?.shadowColor) filters.push(`shadowcolor=${style.shadowColor}`);
-    if (style?.shadowX !== undefined && style?.shadowY !== undefined) {
-      filters.push(`shadowx=${style.shadowX}:shadowy=${style.shadowY}`);
-    }
-    if (style?.alignment !== undefined) filters.push(`alignment=${style.alignment}`);
-    if (style?.position) filters.push(`force_style='Alignment=${style.position}'`);
-
-    const styleString = filters.length > 0 ? `:style=${filters.join(':')}` : '';
-
-    // Convert Windows backslashes to forward slashes and quote the path
-    const normalizedPath = subtitleFile.replace(/\\/g, '/');
-    return `subtitles='${normalizedPath}'${styleString}`;
-  }
 }

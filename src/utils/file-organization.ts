@@ -17,7 +17,6 @@ export interface ExtendedDirectoryStructure {
   base: string;
   source: string;
   clips: string;
-  subtitles: string;
   thumbnails: string;
   metadata: string;
   assets: string;
@@ -29,7 +28,6 @@ export interface ExtendedDirectoryStructure {
 
   // Granular asset directories
   assetsThumbnails: string;
-  assetsSubtitles: string;
   assetsTemp: string;
 }
 
@@ -43,12 +41,6 @@ export interface ExtendedFileManifest {
     duration: number;
     fileSize: number;
     quality: string;
-  }>;
-  subtitles: Array<{
-    id: string;
-    filename: string;
-    path: string;
-    format: string;
   }>;
   thumbnails: Array<{
     id: string;
@@ -83,7 +75,6 @@ export class FileOrganizationService {
       base: mintDir,
       source: path.join(mintDir, config.directoryStructure.source || 'raw'),  // Use configured name, default to 'raw'
       clips: clipsDir,
-      subtitles: path.join(assetsDir, 'subtitles'), // Use assets subfolder
       thumbnails: path.join(assetsDir, 'thumbnails'), // Use assets subfolder
       metadata: path.join(mintDir, 'metadata'),
       assets: assetsDir,
@@ -93,7 +84,6 @@ export class FileOrganizationService {
       continuous: path.join(clipsDir, 'continuous'),
       spliced: path.join(clipsDir, 'spliced'),
       assetsThumbnails: path.join(assetsDir, 'thumbnails'),
-      assetsSubtitles: path.join(assetsDir, 'subtitles'),
       assetsTemp: path.join(assetsDir, 'temp')
     };
 
@@ -107,7 +97,6 @@ export class FileOrganizationService {
       structure.continuous,
       structure.spliced,
       structure.assetsThumbnails,
-      structure.assetsSubtitles,
       structure.assetsTemp
     ];
 
@@ -253,17 +242,6 @@ export class FileOrganizationService {
           logIfEnabled(LogLevel.DEBUG, verbose, `📹 Moved video: ${clip.filename} -> ${newFilename}`);
         }
 
-        // Organize subtitle file if exists
-        let newSubtitlePath: string | undefined;
-        if (clip.subtitles) {
-          const subtitleName = path.basename(clip.subtitles);
-          newSubtitlePath = path.join(structure.assetsSubtitles, subtitleName);
-          if (clip.subtitles !== newSubtitlePath) {
-            await fs.promises.rename(clip.subtitles, newSubtitlePath);
-            logIfEnabled(LogLevel.DEBUG, verbose, `📄 Moved subtitle: ${subtitleName}`);
-          }
-        }
-
         // Organize thumbnail file if exists
         let newThumbnailPath: string | undefined;
         if (clip.thumbnail) {
@@ -283,9 +261,6 @@ export class FileOrganizationService {
         };
 
         // Only add optional properties if they exist
-        if (newSubtitlePath) {
-          organizedClip.subtitles = newSubtitlePath;
-        }
         if (newThumbnailPath) {
           organizedClip.thumbnail = newThumbnailPath;
         }
@@ -325,7 +300,6 @@ export class FileOrganizationService {
         manifestPath,
         mintId: manifestData.mintId,
         totalVideos: manifestData.fileManifest.videos.length,
-        totalSubtitles: manifestData.fileManifest.subtitles.length,
         totalThumbnails: manifestData.fileManifest.thumbnails.length
       });
 
@@ -350,7 +324,6 @@ export class FileOrganizationService {
   ): FileManifest {
     const manifest: FileManifest = {
       videos: [],
-      subtitles: [],
       thumbnails: [],
       metadata: []
     };
@@ -366,17 +339,6 @@ export class FileOrganizationService {
         format: clip.format,
         createdAt: new Date().toISOString()
       });
-
-      // Add subtitle file if exists
-      if (clip.subtitles) {
-        manifest.subtitles.push({
-          id: clip.id,
-          filename: path.basename(clip.subtitles),
-          path: path.relative(structure.base, clip.subtitles),
-          language: 'en',
-          format: 'srt'
-        });
-      }
 
       // Add thumbnail file if exists
       if (clip.thumbnail) {
