@@ -209,8 +209,12 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
 
           if (clipConstructionResult.success && clipConstructionResult.summary) {
             const { summary } = clipConstructionResult;
+            const hasSubtitles = options.subtitles?.enabled;
+            const clipCountLabel = hasSubtitles 
+              ? `${summary.successful} clips (${summary.successful * 2} videos: original + subtitled)` 
+              : `${summary.successful} videos`;
             summaryItems.push(
-              { label: 'Clips generated', value: `${summary.successful} videos`, emoji: '🎥' },
+              { label: 'Clips generated', value: clipCountLabel, emoji: '🎥' },
               { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }
             );
 

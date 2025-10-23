@@ -73,6 +73,7 @@ export interface ConstructedClip {
   segments: ClipSegment[];
   metadata: ClipMetadata;
   thumbnail?: string; // Path to thumbnail file
+  subtitledVersion?: string; // Path to subtitled version if generated
   constructionTime: number;
   success: boolean;
   error?: string;

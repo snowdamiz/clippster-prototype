@@ -277,9 +277,10 @@ export class ClipConstructionService {
       await this.embedMetadata(videoFile, metadata, options);
     }
 
-    // Generate and apply subtitles if enabled
+    // Generate subtitled version if enabled
+    let subtitledVideoFile: string | undefined;
     if (options.subtitles?.enabled && options.transcriptionWords && options.transcriptionWords.length > 0) {
-      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '📝 Adding subtitles to clip', {
+      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '📝 Creating subtitled version of clip', {
         clipId,
         wordsAvailable: options.transcriptionWords.length,
         clipType: clip.type,
@@ -317,21 +318,23 @@ export class ClipConstructionService {
           // Words are already aligned to clip timeline - no adjustment needed
           const adjustedSubtitles = subtitleData;
 
-          // Create temporary file for subtitle rendering
-          const tempOutputFile = videoFile.replace('.mp4', '_with_subs.mp4');
+          // Create subtitled version (keep original without subtitles)
+          const baseName = path.basename(videoFile, path.extname(videoFile));
+          const dirName = path.dirname(videoFile);
+          const ext = path.extname(videoFile);
+          subtitledVideoFile = path.join(dirName, `${baseName}_subtitled${ext}`);
           
-          // Apply subtitles to video
+          // Apply subtitles to create new version
           await this.ffmpegService.addSubtitles(
             videoFile,
-            tempOutputFile,
+            subtitledVideoFile,
             adjustedSubtitles
           );
 
-          // Replace original with subtitled version
-          await fs.promises.unlink(videoFile);
-          await fs.promises.rename(tempOutputFile, videoFile);
-
-          logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '✅ Subtitles added successfully');
+          logIfEnabled(LogLevel.DEBUG, options.verbose !== false, '✅ Subtitled version created successfully', {
+            originalFile: path.basename(videoFile),
+            subtitledFile: path.basename(subtitledVideoFile)
+          });
         } else {
           logIfEnabled(LogLevel.WARN, options.verbose !== false, '⚠️ No words found for clip time range, skipping subtitles');
         }
@@ -341,7 +344,7 @@ export class ClipConstructionService {
       }
     }
 
-    // Always generate thumbnail
+    // Always generate thumbnail (from the original non-subtitled version)
     let thumbnailFile: string | undefined;
     if (options.includeThumbnails !== false) {
       thumbnailFile = await this.generateThumbnail(clip, videoFile, options, directoryStructure);
@@ -374,6 +377,14 @@ export class ClipConstructionService {
 
     if (thumbnailFile) {
       result.thumbnail = thumbnailFile;
+    }
+
+    if (subtitledVideoFile) {
+      result.subtitledVersion = subtitledVideoFile;
+      logIfEnabled(LogLevel.INFO, options.verbose !== false, '✅ Both versions created', {
+        original: path.basename(videoFile),
+        subtitled: path.basename(subtitledVideoFile)
+      });
     }
 
     return result;
