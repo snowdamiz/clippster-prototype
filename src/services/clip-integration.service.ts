@@ -108,31 +108,57 @@ export class ClipIntegrationService {
     });
 
     try {
-      // Create organized directory structure (raw folder already exists from download)
-      const mintDir = path.join(baseOutputDirectory, mintId);
-      const fileOrgConfig: FileOrganizationConfig = {
-        baseDirectory: baseOutputDirectory,  // Pass base directory, let createDirectoryStructure add mintId
-        mintId,
-        createSubdirectories: true,
-        directoryStructure: {
-          source: 'raw',  // Use 'raw' instead of 'source' to match existing structure
-          clips: 'clips',
-          metadata: 'metadata',
-          assets: 'assets'
-        },
-        fileNaming: {
-          includeMintId: true,
-          includeTimestamp: true,
-          includeViralityScore: true,
-          separator: '_',
-          mintId
-        }
+      // baseOutputDirectory is now the runDir (e.g., downloads/mintId/timestamp)
+      // We need to create subdirectories within it
+      const runDir = baseOutputDirectory;
+      
+      // Create subdirectories manually since we don't want another mint folder
+      const clipsDir = path.join(runDir, 'clips');
+      const assetsDir = path.join(runDir, 'assets');
+      const metadataDir = path.join(runDir, 'metadata');
+      const logsDir = path.join(runDir, 'logs');
+      const rawDir = path.join(runDir, 'raw');
+
+      const directoryStructure = {
+        base: runDir,
+        source: rawDir,
+        clips: clipsDir,
+        subtitles: path.join(assetsDir, 'subtitles'),
+        thumbnails: path.join(assetsDir, 'thumbnails'),
+        metadata: metadataDir,
+        assets: assetsDir,
+        logs: logsDir,
+        continuous: path.join(clipsDir, 'continuous'),
+        spliced: path.join(clipsDir, 'spliced'),
+        assetsThumbnails: path.join(assetsDir, 'thumbnails'),
+        assetsSubtitles: path.join(assetsDir, 'subtitles'),
+        assetsTemp: path.join(assetsDir, 'temp')
       };
 
-      const directoryStructure = await this.fileOrganizer.createDirectoryStructure(
-        fileOrgConfig,
-        options.verbose
-      );
+      // Create all directories
+      const dirsToCreate = [
+        clipsDir,
+        assetsDir,
+        metadataDir,
+        logsDir,
+        path.join(clipsDir, 'continuous'),
+        path.join(clipsDir, 'spliced'),
+        path.join(assetsDir, 'subtitles'),
+        path.join(assetsDir, 'thumbnails'),
+        path.join(assetsDir, 'temp')
+      ];
+
+      for (const dir of dirsToCreate) {
+        await fs.promises.mkdir(dir, { recursive: true });
+      }
+
+      const fileNamingConfig = {
+        includeMintId: true,
+        includeTimestamp: true,
+        includeViralityScore: true,
+        separator: '_',
+        mintId
+      };
 
       // Files are already in the raw directory from download, so no need to move them
       // Just reference them directly
@@ -239,6 +265,19 @@ export class ClipIntegrationService {
       }
 
       // Organize files
+      const fileOrgConfig = {
+        baseDirectory: runDir,
+        mintId,
+        createSubdirectories: false,
+        directoryStructure: {
+          source: 'raw',
+          clips: 'clips',
+          metadata: 'metadata',
+          assets: 'assets'
+        },
+        fileNaming: fileNamingConfig
+      };
+
       const organizedClips = await this.fileOrganizer.organizeClips(
         optimizedClips,
         directoryStructure,

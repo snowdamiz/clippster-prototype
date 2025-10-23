@@ -148,6 +148,7 @@ export class DownloadManager {
     transcription?: any;
     clipDetection?: ClipDetectionResponse;
     clipsFile?: string;
+    runDir?: string;
     error?: string
   }> {
     const verbose = options.verbose || false;
@@ -179,9 +180,11 @@ export class DownloadManager {
       const shortStreamId = streamId.length > 20 ? streamId.slice(0, 20) + '...' : streamId;
       logger.success(`Found ${indexDescription}: ${shortStreamId}`);
 
-      // Create mint-specific directory structure
+      // Create mint-specific directory structure with timestamp for multiple runs
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const mintDir = path.join(outputDir, mintId);
-      const rawDir = path.join(mintDir, 'raw');
+      const runDir = path.join(mintDir, timestamp);
+      const rawDir = path.join(runDir, 'raw');
       this.ensureOutputDirectory(rawDir, verbose);
 
       // Generate filename and path in raw directory
@@ -312,6 +315,7 @@ export class DownloadManager {
             file: separatedFiles.videoOnlyPath,
             audioFile: separatedFiles.audioOnlyPath,
             transcription: transcriptionResult,
+            runDir,
             ...(clipDetectionResults && { clipDetection: clipDetectionResults }),
             ...(clipsFilePath && { clipsFile: clipsFilePath })
           };
@@ -358,6 +362,7 @@ export class DownloadManager {
       transcription?: any;
       clipDetection?: ClipDetectionResponse;
       clipsFile?: string;
+      runDir?: string;
       error?: string;
     };
   }> {

@@ -88,7 +88,7 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
       const results = await downloadManager.processDownloads(mintId, options, appLogger);
 
       // Show download summary
-      const { success, file, audioFile, transcription, clipDetection, clipsFile, error } = results.downloadResult;
+      const { success, file, audioFile, transcription, clipDetection, clipsFile, runDir, error } = results.downloadResult;
 
       if (success && file) {
         const summaryItems = [
@@ -189,14 +189,15 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           appLogger.step('🎬 Constructing video clips from AI detection results');
 
           const clipIntegrationService = new ClipIntegrationService();
-          const baseOutputDir = options.output || './downloads';
+          // Use runDir if available, otherwise fall back to base directory
+          const baseConstructionDir = runDir || (options.output || './downloads');
 
           clipConstructionResult = await clipIntegrationService.integrateClipConstruction(
             mintId,
             clipDetection,
             file,
             audioFile,
-            baseOutputDir,
+            baseConstructionDir,
             clipIntegrationOptions
           );
 
