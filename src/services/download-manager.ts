@@ -243,6 +243,69 @@ export class DownloadManager {
           logIfEnabled(LogLevel.INFO, verbose, `  📊 Word count: ${transcriptionResult.verbose.words.length}`);
           logIfEnabled(LogLevel.INFO, verbose, `  💬 Conversation segments: ${transcriptionResult.simple.segments.length}`);
 
+          // CRITICAL: Normalize word timestamps to video timeline by adding audioStart offset
+          // This ensures all downstream code (clip extraction, subtitles) works in video timeline
+          const { FFmpegService } = await import('../utils/ffmpeg');
+          const ffmpegService = new FFmpegService();
+          await ffmpegService.initialize();
+          
+          try {
+            const videoInfo = await ffmpegService.getVideoInfo(separatedFiles.videoOnlyPath);
+            const audioStartOffset = videoInfo.audioStart || 0;
+            
+            if (audioStartOffset > 0) {
+              logIfEnabled(LogLevel.DEBUG, verbose, `🔧 Normalizing word timestamps to video timeline`, {
+                audioStartOffset: audioStartOffset.toFixed(3),
+                wordCountBefore: transcriptionResult.verbose.words.length,
+                firstWordBefore: transcriptionResult.verbose.words[0] ? 
+                  `"${transcriptionResult.verbose.words[0].word}" @ ${transcriptionResult.verbose.words[0].start.toFixed(3)}s` : 'none'
+              });
+              
+              // Adjust all word timestamps by audioStart offset
+              transcriptionResult.verbose.words = transcriptionResult.verbose.words.map(word => ({
+                ...word,
+                start: word.start + audioStartOffset,
+                end: word.end + audioStartOffset
+              }));
+              
+              // Also adjust segment timestamps if they exist
+              if (transcriptionResult.verbose.segments) {
+                transcriptionResult.verbose.segments = transcriptionResult.verbose.segments.map(segment => {
+                  const adjustedSegment: any = {
+                    ...segment,
+                    start: segment.start + audioStartOffset,
+                    end: segment.end + audioStartOffset
+                  };
+                  
+                  // Only include words if they exist
+                  if (segment.words) {
+                    adjustedSegment.words = segment.words.map(word => ({
+                      ...word,
+                      start: word.start + audioStartOffset,
+                      end: word.end + audioStartOffset
+                    }));
+                  }
+                  
+                  return adjustedSegment;
+                });
+              }
+              
+              const lastWord = transcriptionResult.verbose.words[transcriptionResult.verbose.words.length - 1];
+              logIfEnabled(LogLevel.DEBUG, verbose, `✅ Timeline normalization complete`, {
+                wordCount: transcriptionResult.verbose.words.length,
+                firstWordAfter: transcriptionResult.verbose.words[0] ? 
+                  `"${transcriptionResult.verbose.words[0].word}" @ ${transcriptionResult.verbose.words[0].start.toFixed(3)}s` : 'none',
+                lastWordAfter: lastWord ? 
+                  `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
+                note: 'All timestamps now in VIDEO timeline'
+              });
+            } else {
+              logIfEnabled(LogLevel.DEBUG, verbose, `ℹ️ No audio offset detected, timestamps already in video timeline`);
+            }
+          } catch (offsetError) {
+            logIfEnabled(LogLevel.WARN, verbose, `⚠️ Could not get audio offset, proceeding with original timestamps`, offsetError);
+          }
+
           // Save transcription to file in raw directory
           const transcriptFilename = `transcript_${filename.replace('.mp4', '')}.json`;
           const transcriptPath = path.join(rawDir, transcriptFilename);

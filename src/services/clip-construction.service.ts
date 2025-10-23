@@ -380,7 +380,7 @@ export class ClipConstructionService {
    * Extracts a continuous clip from source video
    * @param sourceVideoFile Path to source video
    * @param outputPath Output file path
-   * @param startTime Start time in seconds
+   * @param startTime Start time in seconds (IN VIDEO TIMELINE)
    * @param duration Duration in seconds
    * @param options Construction options
    * @returns Promise resolving to output file path
@@ -392,20 +392,19 @@ export class ClipConstructionService {
     duration: number,
     options: ClipConstructionOptions
   ): Promise<string> {
-    // Get the audio stream start offset from the video file
-    const streamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
-    const adjustedStartTime = startTime + streamOffset;
+    // NO OFFSET ADJUSTMENT: Timestamps are already in VIDEO timeline (normalized in download-manager)
+    // Previously we added audioStart offset here, but that's now handled at transcription time
     
-    logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Adjusting timestamp for HLS offset`, {
-      originalStart: startTime,
-      streamOffset,
-      adjustedStart: adjustedStartTime
+    logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Extracting clip at video timeline position`, {
+      startTime: startTime.toFixed(3),
+      duration: duration.toFixed(3),
+      note: 'Timestamps already in video timeline (no offset adjustment needed)'
     });
     
     return this.ffmpegService.extractClip({
       input: sourceVideoFile,
       output: outputPath,
-      startTime: adjustedStartTime,
+      startTime: startTime, // Use directly - already in video timeline
       duration,
       quality: options.quality || 'medium',
       format: options.format || 'mp4'
@@ -416,7 +415,7 @@ export class ClipConstructionService {
    * Constructs a spliced clip from multiple segments
    * @param sourceVideoFile Path to source video
    * @param outputPath Output file path
-   * @param segments Array of clip segments
+   * @param segments Array of clip segments (IN VIDEO TIMELINE)
    * @param options Construction options
    * @returns Promise resolving to output file path
    */
@@ -426,19 +425,18 @@ export class ClipConstructionService {
     segments: ClipSegment[],
     options: ClipConstructionOptions
   ): Promise<string> {
-    // Get the audio stream start offset from the video file
-    const streamOffset = await this.getAudioStreamStartOffset(sourceVideoFile);
+    // NO OFFSET ADJUSTMENT: Segment timestamps are already in VIDEO timeline (normalized in download-manager)
+    // Previously we added audioStart offset here, but that's now handled at transcription time
     
-    const segmentData = segments.map(segment => {
-      const adjustedStart = segment.start_time + streamOffset;
-      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Adjusting segment timestamp`, {
-        originalStart: segment.start_time,
-        streamOffset,
-        adjustedStart
+    const segmentData = segments.map((segment, idx) => {
+      logIfEnabled(LogLevel.DEBUG, options.verbose !== false, `📍 Using segment ${idx + 1}/${segments.length} at video timeline position`, {
+        startTime: segment.start_time.toFixed(3),
+        duration: segment.duration.toFixed(3),
+        note: 'Timestamps already in video timeline (no offset adjustment needed)'
       });
       return {
         input: sourceVideoFile,
-        start: adjustedStart,
+        start: segment.start_time, // Use directly - already in video timeline
         duration: segment.duration
       };
     });
@@ -451,19 +449,15 @@ export class ClipConstructionService {
 
   /**
    * Gets the audio stream start offset from the video file
-   * This is needed to adjust timestamps from audio transcription to video timeline
+   * DEPRECATED: This method is no longer needed as timestamps are normalized
+   * to video timeline at transcription time in download-manager.ts
+   * Kept for backward compatibility but always returns 0.
    * @param videoFile Path to the video file
-   * @returns Audio stream start time in seconds
+   * @returns Always returns 0 (offset already applied at transcription)
    */
   private async getAudioStreamStartOffset(videoFile: string): Promise<number> {
-    try {
-      const videoInfo = await this.ffmpegService.getVideoInfo(videoFile);
-      // Return the audio stream start time, defaulting to 0 if not available
-      return videoInfo.audioStart || 0;
-    } catch (error) {
-      // If we can't get the info, assume no offset
-      return 0;
-    }
+    // No longer needed - timestamps are already in video timeline
+    return 0;
   }
 
   /**
@@ -699,11 +693,12 @@ export class ClipConstructionService {
 
   /**
    * Extract words for clip and adjust timestamps to clip's timeline (starting at 0)
+   * IMPORTANT: Expects allWords to be in VIDEO timeline (normalized in download-manager)
    * Uses validated word indices when available, falls back to timestamp filtering
    * For continuous clips: Simple offset adjustment
    * For spliced clips: Map each segment to its position in the final clip
-   * @param segments - Clip segments with timing
-   * @param allWords - All words from transcription
+   * @param segments - Clip segments with timing (IN VIDEO TIMELINE)
+   * @param allWords - All words from transcription (IN VIDEO TIMELINE)
    * @param clipType - Type of clip (continuous or spliced)
    * @returns Words with timestamps adjusted to clip timeline (0-based)
    */
@@ -721,41 +716,74 @@ export class ClipConstructionService {
       
       let segmentWords: Word[];
       
-      // Use validated word indices if available (most reliable!)
+      // PRIORITY 1: Use validated word indices if available (MOST RELIABLE!)
       if (segment.wordIndices) {
         segmentWords = allWords.slice(segment.wordIndices.start, segment.wordIndices.end + 1);
-        logIfEnabled(LogLevel.DEBUG, true, `🎯 Using validated word indices`, {
+        
+        const firstWord = segmentWords[0];
+        const lastWord = segmentWords[segmentWords.length - 1];
+        
+        logIfEnabled(LogLevel.DEBUG, true, `🎯 Using validated word indices (RELIABLE)`, {
           indices: `${segment.wordIndices.start} to ${segment.wordIndices.end}`,
-          wordCount: segmentWords.length
+          wordCount: segmentWords.length,
+          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
+          firstWord: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
+          lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none'
         });
       } else {
-        // Fallback to timestamp filtering with generous tolerance
-        const tolerance = 0.2;
+        // FALLBACK: Timestamp filtering with generous tolerance
+        // NOTE: Since both segment times and word times are in VIDEO timeline, direct comparison works
+        const tolerance = 0.3; // Increased tolerance for better boundary capture
         segmentWords = allWords.filter(word => 
           word.start >= (segment.start_time - tolerance) && 
-          word.start <= (segment.end_time + tolerance)
+          word.end <= (segment.end_time + tolerance)
         );
-        logIfEnabled(LogLevel.WARN, true, `⚠️ No word indices, using timestamp filter`, {
-          timeRange: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s`,
-          wordCount: segmentWords.length
+        
+        const firstWord = segmentWords[0];
+        const lastWord = segmentWords[segmentWords.length - 1];
+        
+        logIfEnabled(LogLevel.WARN, true, `⚠️ No word indices - using timestamp filter (LESS RELIABLE)`, {
+          timeRange: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
+          tolerance: tolerance,
+          wordCount: segmentWords.length,
+          firstWord: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
+          lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none'
         });
       }
       
-      // Adjust to clip timeline (start at 0)
-      // Use the FIRST word's timestamp as the reference point (most accurate)
-      const firstWordTime = segmentWords[0]?.start || segment.start_time;
+      if (segmentWords.length === 0) {
+        logIfEnabled(LogLevel.ERROR, true, `❌ No words found for segment!`, {
+          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s`,
+          totalWords: allWords.length,
+          firstWordInTranscript: allWords[0] ? `"${allWords[0].word}" @ ${allWords[0].start.toFixed(2)}s` : 'none'
+        });
+        return [];
+      }
       
-      logIfEnabled(LogLevel.DEBUG, true, `🔧 Adjusting word timestamps`, {
-        referenceTime: firstWordTime.toFixed(2),
-        segmentStartTime: segment.start_time.toFixed(2),
-        timeDifference: Math.abs(firstWordTime - segment.start_time).toFixed(2)
+      // Adjust to clip timeline (start at 0)
+      // Use segment.start_time as the reference since all timestamps are now consistent (VIDEO timeline)
+      const clipStartTime = segment.start_time;
+      
+      logIfEnabled(LogLevel.DEBUG, true, `🔧 Mapping words to clip timeline`, {
+        clipStartTime: clipStartTime.toFixed(3),
+        wordCount: segmentWords.length,
+        mapping: 'word.start - clipStartTime => clip timeline position'
       });
       
       const adjustedWords = segmentWords.map(word => ({
         ...word,
-        start: word.start - firstWordTime,
-        end: word.end - firstWordTime
+        start: word.start - clipStartTime,  // Both in VIDEO timeline, direct subtraction works
+        end: word.end - clipStartTime
       }));
+      
+      // Validation: Check that all words are within clip duration
+      const invalidWords = adjustedWords.filter(w => w.start < 0 || w.end < 0);
+      if (invalidWords.length > 0) {
+        logIfEnabled(LogLevel.ERROR, true, `❌ Found ${invalidWords.length} words with negative timestamps!`, {
+          firstInvalid: `"${invalidWords[0]?.word}" @ ${invalidWords[0]?.start.toFixed(3)}s`,
+          clipStartTime
+        });
+      }
       
       return adjustedWords;
     }
@@ -769,61 +797,101 @@ export class ClipConstructionService {
       
       let segmentWords: Word[];
       
-      // Use validated word indices if available (most reliable!)
+      // PRIORITY 1: Use validated word indices if available (MOST RELIABLE!)
       if (segment.wordIndices) {
         segmentWords = allWords.slice(segment.wordIndices.start, segment.wordIndices.end + 1);
         
         const firstWord = segmentWords[0];
         const lastWord = segmentWords[segmentWords.length - 1];
         
-        logIfEnabled(LogLevel.DEBUG, true, `🎯 Segment ${i + 1}/${segments.length} using validated indices`, {
+        logIfEnabled(LogLevel.DEBUG, true, `🎯 Segment ${i + 1}/${segments.length} using validated indices (RELIABLE)`, {
           indices: `${segment.wordIndices.start} to ${segment.wordIndices.end}`,
           wordsFound: segmentWords.length,
-          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s`,
+          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
           firstWordOriginal: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
           lastWordOriginal: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none',
-          finalTimeRange: `${currentClipTime.toFixed(2)}s - ${(currentClipTime + segment.duration).toFixed(2)}s`
+          finalTimeRange: `${currentClipTime.toFixed(2)}s - ${(currentClipTime + segment.duration).toFixed(2)}s (clip timeline)`
         });
       } else {
-        // Fallback to timestamp filtering with generous tolerance
-        const tolerance = 0.2;
+        // FALLBACK: Timestamp filtering with generous tolerance
+        // NOTE: Since both segment times and word times are in VIDEO timeline, direct comparison works
+        const tolerance = 0.3; // Increased tolerance for better boundary capture
         segmentWords = allWords.filter(word => 
           word.start >= (segment.start_time - tolerance) && 
-          word.start <= (segment.end_time + tolerance)
+          word.end <= (segment.end_time + tolerance)
         );
-        logIfEnabled(LogLevel.WARN, true, `⚠️ Segment ${i + 1}/${segments.length} no indices, using timestamps`, {
-          originalTimeRange: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s`,
+        
+        const firstWord = segmentWords[0];
+        const lastWord = segmentWords[segmentWords.length - 1];
+        
+        logIfEnabled(LogLevel.WARN, true, `⚠️ Segment ${i + 1}/${segments.length} no indices - using timestamp filter (LESS RELIABLE)`, {
+          originalTimeRange: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s (VIDEO timeline)`,
+          tolerance: tolerance,
           wordsFound: segmentWords.length,
-          finalTimeRange: `${currentClipTime.toFixed(2)}s - ${(currentClipTime + segment.duration).toFixed(2)}s`
+          firstWord: firstWord ? `"${firstWord.word}" @ ${firstWord.start.toFixed(2)}s` : 'none',
+          lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(2)}s` : 'none',
+          finalTimeRange: `${currentClipTime.toFixed(2)}s - ${(currentClipTime + segment.duration).toFixed(2)}s (clip timeline)`
         });
       }
       
-      // Map words to their position in the final spliced clip
-      // Use the FIRST word's timestamp as the reference point (most accurate)
-      const firstWordTime = segmentWords[0]?.start || segment.start_time;
+      if (segmentWords.length === 0) {
+        logIfEnabled(LogLevel.WARN, true, `⚠️ No words found for segment ${i + 1}/${segments.length}`, {
+          segmentTime: `${segment.start_time.toFixed(2)}s - ${segment.end_time.toFixed(2)}s`
+        });
+        // Continue to next segment instead of failing
+        continue;
+      }
       
-      logIfEnabled(LogLevel.DEBUG, true, `🔧 Adjusting word timestamps for segment ${i + 1}`, {
-        referenceTime: firstWordTime.toFixed(2),
-        segmentStartTime: segment.start_time.toFixed(2),
-        timeDifference: Math.abs(firstWordTime - segment.start_time).toFixed(2)
+      // Map words to their position in the final spliced clip
+      // Use segment.start_time as the reference since all timestamps are now consistent (VIDEO timeline)
+      const segmentStartTime = segment.start_time;
+      
+      logIfEnabled(LogLevel.DEBUG, true, `🔧 Mapping segment ${i + 1} words to clip timeline`, {
+        segmentStartTime: segmentStartTime.toFixed(3),
+        currentClipTime: currentClipTime.toFixed(3),
+        wordCount: segmentWords.length,
+        mapping: `word.start - segmentStartTime + currentClipTime => clip position`
       });
       
       const adjustedWords = segmentWords.map(word => {
-        const newStart = currentClipTime + (word.start - firstWordTime);
-        const newEnd = currentClipTime + (word.end - firstWordTime);
+        // Calculate position in clip timeline:
+        // 1. word.start is in VIDEO timeline
+        // 2. Subtract segmentStartTime to get offset within segment
+        // 3. Add currentClipTime to position in final clip
+        const newStart = currentClipTime + (word.start - segmentStartTime);
+        const newEnd = currentClipTime + (word.end - segmentStartTime);
         
-        // Clamp to valid range to handle edge cases
         return {
           ...word,
-          start: Math.max(0, newStart),
+          start: Math.max(0, newStart), // Clamp to prevent negative
           end: Math.max(0, newEnd)
         };
       });
+      
+      // Validation: Check for invalid timestamps
+      const invalidWords = adjustedWords.filter(w => w.start < 0 || w.end < 0 || w.start >= w.end);
+      if (invalidWords.length > 0) {
+        logIfEnabled(LogLevel.ERROR, true, `❌ Segment ${i + 1} has ${invalidWords.length} words with invalid timestamps!`, {
+          firstInvalid: invalidWords[0] ? `"${invalidWords[0].word}" @ ${invalidWords[0].start.toFixed(3)}s` : 'none'
+        });
+      }
       
       extractedWords.push(...adjustedWords);
       
       // Move timeline forward by this segment's duration
       currentClipTime += segment.duration;
+    }
+    
+    // Final validation
+    if (extractedWords.length > 0) {
+      const lastWord = extractedWords[extractedWords.length - 1];
+      logIfEnabled(LogLevel.DEBUG, true, `✅ Spliced clip word extraction complete`, {
+        totalWords: extractedWords.length,
+        segments: segments.length,
+        firstWord: `"${extractedWords[0]?.word}" @ ${extractedWords[0]?.start.toFixed(3)}s`,
+        lastWord: lastWord ? `"${lastWord.word}" @ ${lastWord.end.toFixed(3)}s` : 'none',
+        totalClipDuration: currentClipTime.toFixed(3)
+      });
     }
 
     return extractedWords;
