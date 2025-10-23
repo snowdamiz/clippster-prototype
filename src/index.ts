@@ -210,9 +210,16 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
           if (clipConstructionResult.success && clipConstructionResult.summary) {
             const { summary } = clipConstructionResult;
             const hasSubtitles = options.subtitles?.enabled;
-            const clipCountLabel = hasSubtitles 
-              ? `${summary.successful} clips (${summary.successful * 2} videos: original + subtitled)` 
+            const clipCountLabel = hasSubtitles
+              ? `${summary.successful} clips (${summary.successful * 2} videos: original + subtitled)`
               : `${summary.successful} videos`;
+
+            // Add virality threshold filtering information if applicable
+            if (summary.filteredByViralityThreshold > 0 && summary.viralityThreshold !== undefined) {
+              const filteredInfo = `${summary.filteredByViralityThreshold} clips filtered out (below ${summary.viralityThreshold}/100 virality)`;
+              summaryItems.push({ label: 'Virality filtering', value: filteredInfo, emoji: '⚡' });
+            }
+
             summaryItems.push(
               { label: 'Clips generated', value: clipCountLabel, emoji: '🎥' },
               { label: 'Processing time', value: `${(clipConstructionResult.processingTime / 1000).toFixed(1)}s`, emoji: '⏱️' }
@@ -244,6 +251,14 @@ async function processCliArguments(parsed: ParsedArguments): Promise<void> {
 
             appLogger.success(`✅ Successfully generated ${summary.successful} video clips`);
           } else {
+            // Add virality threshold filtering information even if construction failed
+            if (clipConstructionResult.summary &&
+                clipConstructionResult.summary.filteredByViralityThreshold > 0 &&
+                clipConstructionResult.summary.viralityThreshold !== undefined) {
+              const filteredInfo = `${clipConstructionResult.summary.filteredByViralityThreshold} clips filtered out (below ${clipConstructionResult.summary.viralityThreshold}/100 virality)`;
+              summaryItems.push({ label: 'Virality filtering', value: filteredInfo, emoji: '⚡' });
+            }
+
             summaryItems.push({
               label: 'Clip construction',
               value: clipConstructionResult.error || 'Failed',

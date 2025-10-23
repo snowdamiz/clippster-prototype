@@ -3,10 +3,8 @@ Analyze this {CHUNK_DURATION_MINUTE}-minute stream transcript chunk and identify
 Requirements:
 - Find ALL genuinely clip-worthy moments - quality over quantity
 - Minimum 15 seconds total duration, maximum 120 seconds total per clip
-- Include only moments with real viral potential: strong emotions, humor, insights, controversy, predictions, technical breakdowns, call-outs, celebrations, frustrations, cringe, outlandish
+- Include only moments with real viral potential: strong emotions, humor, insights, controversy, predictions, technical breakdowns, call-outs, celebrations, frustrations, cringe, outlandish, out of context
 - Look for subtle moments too: facial reactions, voice changes, audience interactions
-- If the content is boring or low-quality, return 0-2 clips rather than forcing recommendations
-- If the content is amazing and packed with moments, return 20+ clips
 
 **IMPORTANT: Support for spliced clips**
 Some clips work better by combining multiple segments (removing boring parts between). For example:
@@ -73,7 +71,7 @@ Return ONLY a JSON object with this exact structure:
 
 **Key Requirements:**
 - For "continuous" clips: segments array has 1 item
-- For "spliced" clips: segments array has 2+ items
+- For "spliced" clips: segments array has 2 or more items
 - All timestamps in seconds (decimal precision)
 - Duration calculated as end_time - start_time for each segment
 - total_duration = sum of all segment durations

@@ -25,6 +25,12 @@ export interface ExtendedClipIntegrationOptions extends ClipIntegrationOptions {
   inputAudioFile?: string;
 }
 
+interface FilterResult {
+  filteredClips: DetectedClip[];
+  filteredByViralityThreshold: number;
+  viralityThreshold?: number | undefined;
+}
+
 export interface ExtendedClipIntegrationResult extends ClipIntegrationResult {
   constructionResult?: ClipConstructionResult;
   outputPath?: string;
@@ -33,6 +39,8 @@ export interface ExtendedClipIntegrationResult extends ClipIntegrationResult {
     successful: number;
     failed: number;
     skipped: number;
+    filteredByViralityThreshold: number;
+    viralityThreshold?: number | undefined;
     totalTime: number;
     avgConstructionTime: number;
     totalFileSize: number;
@@ -83,19 +91,22 @@ export class ClipIntegrationService {
 
     if (!clipDetectionResult || clipDetectionResult.clips.length === 0) {
       logIfEnabled(LogLevel.WARN, options.verbose, '⚠️ No clips detected for construction');
+      const summary = {
+        totalClips: 0,
+        successful: 0,
+        failed: 0,
+        skipped: 0,
+        filteredByViralityThreshold: 0,
+        totalTime: 0,
+        avgConstructionTime: 0,
+        totalFileSize: 0,
+        platformOptimizations: []
+      };
+
       return {
         processingTime: 0,
         success: true,
-        summary: {
-          totalClips: 0,
-          successful: 0,
-          failed: 0,
-          skipped: 0,
-          totalTime: 0,
-          avgConstructionTime: 0,
-          totalFileSize: 0,
-          platformOptimizations: []
-        }
+        summary
       };
     }
 
@@ -163,24 +174,32 @@ export class ClipIntegrationService {
       let sourceAudioFile: string | undefined = options.inputAudioFile;
 
       // Filter clips based on options
-      const filteredClips = this.filterClips(clipDetectionResult.clips, options);
+      const filterResult = this.filterClips(clipDetectionResult.clips, options);
+      const filteredClips = filterResult.filteredClips;
 
       logIfEnabled(LogLevel.INFO, options.verbose, `📋 Processing ${filteredClips.length} clips (filtered from ${clipDetectionResult.clips.length})`);
 
       if (filteredClips.length === 0) {
+        const summary: any = {
+          totalClips: clipDetectionResult.clips.length,
+          successful: 0,
+          failed: 0,
+          skipped: clipDetectionResult.clips.length,
+          filteredByViralityThreshold: filterResult.filteredByViralityThreshold,
+          totalTime: 0,
+          avgConstructionTime: 0,
+          totalFileSize: 0,
+          platformOptimizations: []
+        };
+
+        if (filterResult.viralityThreshold !== undefined) {
+          summary.viralityThreshold = filterResult.viralityThreshold;
+        }
+
         return {
           processingTime: Date.now() - startTime,
           success: true,
-          summary: {
-            totalClips: 0,
-            successful: 0,
-            failed: 0,
-            skipped: clipDetectionResult.clips.length,
-            totalTime: 0,
-            avgConstructionTime: 0,
-            totalFileSize: 0,
-            platformOptimizations: []
-          }
+          summary
         };
       }
 
@@ -371,21 +390,28 @@ export class ClipIntegrationService {
         outputPath: directoryStructure.base
       });
 
+      const summary: any = {
+          totalClips: clipDetectionResult.clips.length,
+          successful: organizedClips.length,
+          failed: constructionResult.failed.length,
+          skipped: constructionResult.skipped.length,
+          filteredByViralityThreshold: filterResult.filteredByViralityThreshold,
+          totalTime: constructionResult.summary.totalTime,
+          avgConstructionTime: constructionResult.summary.avgConstructionTime,
+          totalFileSize: constructionResult.summary.totalFileSize,
+          platformOptimizations
+        };
+
+        if (filterResult.viralityThreshold !== undefined) {
+          summary.viralityThreshold = filterResult.viralityThreshold;
+        }
+
       return {
         constructionResult,
         processingTime,
         success: true,
         outputPath: directoryStructure.base,
-        summary: {
-          totalClips: clipDetectionResult.clips.length,
-          successful: organizedClips.length,
-          failed: constructionResult.failed.length,
-          skipped: constructionResult.skipped.length,
-          totalTime: constructionResult.summary.totalTime,
-          avgConstructionTime: constructionResult.summary.avgConstructionTime,
-          totalFileSize: constructionResult.summary.totalFileSize,
-          platformOptimizations
-        }
+        summary
       };
 
     } catch (error) {
@@ -484,22 +510,35 @@ export class ClipIntegrationService {
    * @param options Integration options
    * @returns Filtered array of clips
    */
-  private filterClips(clips: DetectedClip[], options: ExtendedClipIntegrationOptions): DetectedClip[] {
+  private filterClips(clips: DetectedClip[], options: ExtendedClipIntegrationOptions): FilterResult {
     let filteredClips = [...clips];
+    let filteredByViralityThreshold = 0;
+    let viralityThreshold = undefined;
 
     // Filter by virality threshold
     if (options.viralityThreshold !== undefined && options.viralityThreshold > 0) {
       const beforeCount = filteredClips.length;
+      viralityThreshold = options.viralityThreshold;
       filteredClips = filteredClips.filter(clip => clip.virality_score >= options.viralityThreshold!);
+      filteredByViralityThreshold = beforeCount - filteredClips.length;
 
       if (options.verbose) {
-        console.log(`📊 Filtered ${beforeCount - filteredClips.length} clips below virality threshold ${options.viralityThreshold}`);
+        console.log(`📊 Filtered ${filteredByViralityThreshold} clips below virality threshold ${options.viralityThreshold}`);
       }
     }
 
     // Sort by virality score (highest first)
     filteredClips.sort((a, b) => b.virality_score - a.virality_score);
 
-    return filteredClips;
+    const result: FilterResult = {
+      filteredClips,
+      filteredByViralityThreshold
+    };
+
+    if (viralityThreshold !== undefined) {
+      result.viralityThreshold = viralityThreshold;
+    }
+
+    return result;
   }
 }
