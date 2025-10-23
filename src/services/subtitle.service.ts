@@ -223,6 +223,7 @@ export class SubtitleService {
 
     // Build the drawtext filter with text in single quotes
     let filter = `drawtext=text='${escapedText}'`;
+    filter += `:font='Arial Black'`;
     filter += `:fontsize=${style.fontSize}`;
     filter += `:fontcolor=${colorExpr}`;
     filter += `:x=(w-text_w)/2`; // Center horizontally
@@ -280,35 +281,39 @@ export class SubtitleService {
   getStylePreset(name: 'tiktok' | 'youtube' | 'minimal'): SubtitleStyle {
     const presets: Record<string, SubtitleStyle> = {
       tiktok: {
-        fontFamily: 'Arial',
-        fontSize: 60,
+        fontFamily: 'Arial Black',
+        fontSize: 70,
         fontWeight: 'bold',
-        defaultColor: '#FFFFFF',
-        highlightColor: '#FFFF00',
-        outlineColor: '#000000',
-        outlineWidth: 4,
-        shadowColor: '#000000',
-        shadowOffset: { x: 2, y: 2 },
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 8,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 4, y: 4 },
         yPosition: 50
       },
       youtube: {
-        fontFamily: 'Arial',
-        fontSize: 40,
+        fontFamily: 'Arial Black',
+        fontSize: 50,
         fontWeight: 'normal',
-        defaultColor: '#FFFFFF',
-        highlightColor: '#FFFF00',
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        padding: 10,
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 7,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 3, y: 3 },
         yPosition: 85
       },
       minimal: {
-        fontFamily: 'Arial',
-        fontSize: 48,
+        fontFamily: 'Arial Black',
+        fontSize: 58,
         fontWeight: 'normal',
-        defaultColor: '#FFFFFF',
-        highlightColor: '#FFD700',
-        shadowColor: 'rgba(0,0,0,0.7)',
-        shadowOffset: { x: 2, y: 2 },
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 7,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 3, y: 3 },
         yPosition: 80
       }
     };

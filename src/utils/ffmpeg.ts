@@ -730,8 +730,9 @@ export class FFmpegService {
     // Build color expression for highlighting
     const colorExpr = this.buildColorExpression(phrase.words, style);
 
-    // Build drawtext filter with text in quotes
+    // Build drawtext filter with text in quotes and font file path
     let filter = `drawtext=text='${escapedText}'`;
+    filter += `:font='Arial Black'`;
     filter += `:fontsize=${style.fontSize}`;
     filter += `:fontcolor=${colorExpr}`;
     filter += `:x=(w-text_w)/2`; // Center horizontally
@@ -788,35 +789,39 @@ export class FFmpegService {
   private getSubtitleStylePreset(name: 'tiktok' | 'youtube' | 'minimal'): any {
     const presets: Record<string, any> = {
       tiktok: {
-        fontFamily: 'Arial',
-        fontSize: 60,
+        fontFamily: 'Arial Black',
+        fontSize: 70,
         fontWeight: 'bold',
-        defaultColor: '#FFFFFF',
-        highlightColor: '#FFFF00',
-        outlineColor: '#000000',
-        outlineWidth: 4,
-        shadowColor: '#000000',
-        shadowOffset: { x: 2, y: 2 },
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 8,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 4, y: 4 },
         yPosition: 50
       },
       youtube: {
-        fontFamily: 'Arial',
-        fontSize: 40,
+        fontFamily: 'Arial Black',
+        fontSize: 50,
         fontWeight: 'normal',
-        defaultColor: '#FFFFFF',
-        highlightColor: '#FFFF00',
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        padding: 10,
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
+        outlineColor: '#FFFFFF',
+        outlineWidth: 7,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 3, y: 3 },
         yPosition: 85
       },
       minimal: {
-        fontFamily: 'Arial',
-        fontSize: 48,
+        fontFamily: 'Arial Black',
+        fontSize: 58,
         fontWeight: 'normal',
-        defaultColor: '#00FF9C',
-        highlightColor: '#00FF9C',
+        defaultColor: '#16AD48',
+        highlightColor: '#16AD48',
         outlineColor: '#FFFFFF',
-        outlineWidth: 3,
+        outlineWidth: 7,
+        shadowColor: '0x000000@0.5',
+        shadowOffset: { x: 3, y: 3 },
         yPosition: 80
       }
     };
