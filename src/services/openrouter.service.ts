@@ -502,8 +502,11 @@ export class OpenRouterService {
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
       .substring(0, 50); // Limit length
 
-    return `${cleaned}_clip_${index}.mp4`;
+    // Use only the clip name; avoid adding index or other prefixes/suffixes
+    return `${cleaned}.mp4`;
   }
 }

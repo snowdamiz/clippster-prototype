@@ -609,9 +609,12 @@ export class ClipConstructionService {
       .toLowerCase()
       .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
       .substring(0, 50);
 
-    return `${cleanTitle}_${clip.id}.mp4`;
+    // Use only the clip name, no IDs or timestamps
+    return `${cleanTitle}.mp4`;
   }
 
   /**

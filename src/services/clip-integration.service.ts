@@ -162,9 +162,9 @@ export class ClipIntegrationService {
       }
 
       const fileNamingConfig = {
-        includeMintId: true,
-        includeTimestamp: true,
-        includeViralityScore: true,
+        includeMintId: false,
+        includeTimestamp: false,
+        includeViralityScore: false,
         separator: '_',
         mintId
       };

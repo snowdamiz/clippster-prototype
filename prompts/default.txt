@@ -1,38 +1,53 @@
 Analyze this {CHUNK_DURATION_MINUTE}-minute stream transcript chunk and identify ALL clip-worthy moments for TikTok/Shorts/X.
 
 **DETECTION PHILOSOPHY:**
-- BIAS TOWARDS FINDING CLIPS - when in doubt, include it
-- Look for ANY moment that could capture attention or generate engagement
-- Extract moments at different stages: setup, peak, aftermath, reactions
-- Lower your threshold - if something stands out from normal conversation, it's likely clip-worthy
+- BIAS TOWARDS FINDING CLIPS — when in doubt, include it, BUT NEVER at the cost of coherence.
+- Prioritize moments that stand alone: a clear setup → development → payoff.
+- Extract moments at different stages: setup, peak, aftermath, reactions.
+- Lower your threshold — if something stands out from normal conversation, it's likely clip-worthy.
 
 **MULTI-SPEAKER AWARENESS:**
-- The transcript contains labeled speakers (e.g., SPEAKER_00, SPEAKER_01, etc.)
-- Pay attention to speaker dynamics: who's talking, how they interact, back-and-forth exchanges
-- Great clips often involve speaker interactions: debates, reactions to each other, collaborative moments
-- Consider dialogue flow between speakers - rapid exchanges, interruptions, or call-and-response patterns
-- One speaker's strong reaction to another speaker's statement is highly clip-worthy
+- The transcript contains labeled speakers (e.g., SPEAKER_00, SPEAKER_01, etc.).
+- Pay attention to speaker dynamics: who's talking, how they interact, back-and-forth exchanges.
+- Great clips often involve interactions: debates, reactions, call-and-response.
+- If a reaction depends on a prior line, include the minimal setup line(s) that make it understandable.
 
-**Requirements:**
-- Minimum 15 seconds total duration, maximum 120 seconds total per clip
-- Identify moments with ANY of these qualities:
-  * Strong emotions or emotional shifts
-  * Humor, comedy, or awkwardness
-  * Drama, tension, or conflict
-  * Surprises, reveals, or unexpected turns
-  * Impressive demonstrations or bold statements
-  * Unusual behavior or situations
-  * Struggles, failures, or vulnerability
-  * High-energy or intense moments
-  * Relatable or resonant content
-  * Quotable lines that work out of context
-  * Notable reactions or audience engagement
+**CLIP QUALITY & BOUNDARY RULES (fixes common issues):**
+1) Start of clip MUST be a natural beginning of a sentence or thought.
+   - Avoid starting mid-sentence or on connective fillers ("and", "so", "but", "because", "like") unless they naturally begin a new bit.
+   - If the hook begins mid-thought, scan backward within the chunk to the prior sentence boundary, speaker turn, or a pause ≥ 0.35s.
+   - Add a pre-roll pad of 0.15–0.30s before the first spoken word (if available in the chunk).
+2) End of clip MUST complete the thought.
+   - Extend to the end of the sentence or the natural resolution/punchline.
+   - Do NOT end at the first word of a new sentence. Stop just before the next sentence begins, then add a post-roll pad of 0.30–0.60s.
+   - Prefer ending at ., ?, !, or at a pause ≥ 0.45s.
+3) Consistency & coherence.
+   - The clip should make sense without external context. Include the smallest necessary setup for clarity.
+   - If a complete coherent thought cannot fit within duration limits, SKIP it.
+4) Spliced clips.
+   - Each segment must independently follow the same start/end rules (sentence boundary + pads).
+   - Segments must be chronological, non-overlapping, and thematically unified.
+   - Only splice to remove dull filler between high-value moments or to tighten a single topic.
+5) Hard constraints.
+   - Minimum 15s, maximum 120s total per clip.
+   - Prefer 20–75s when possible for short-form platforms.
 
-**IMPORTANT: Support for spliced clips**
-Some clips work better by combining multiple segments (removing boring parts between). For example:
-- A great reaction at 1:05:00, then boring talk, then the punchline at 1:07:30
-- Multiple funny moments from the same topic spread across 10 minutes
-- A technical explanation with parts that should be removed for clarity
+**WHAT TO LOOK FOR:**
+- Strong emotions or shifts; humor/awkwardness; drama/tension/conflict; surprises/reveals; bold claims; unusual behavior; struggle/vulnerability; high energy; relatable/resonant lines; quotable statements; notable reactions or audience moments.
+
+**BOUNDARY SELECTION ALGORITHM (use when computing start_time/end_time):**
+1) Choose a candidate hook (statement/joke/reaction) and its payoff/resolution.
+2) Backward adjust start:
+   - Move start to the prior sentence boundary, speaker change, or a silence gap ≥ 0.35s.
+   - If needed for clarity, include 1–2 short setup lines.
+   - Start_time = max(adjusted_start - 0.20s, {START_TIME}).
+3) Forward extend end:
+   - Continue through the payoff and to the sentence boundary or silence gap ≥ 0.45s.
+   - End_time = min(adjusted_end + 0.40s, {END_TIME}).
+   - Ensure end_time occurs BEFORE the first word of the next sentence.
+4) Validate:
+   - total_duration within [15, 120] seconds. If not, drop or reframe.
+   - If any segment starts mid-word or ends mid-word, shift boundaries to the nearest clean word boundary.
 
 **TRANSCRIPT CHUNK:**
 Time range: {START_TIME} to {END_TIME}
@@ -92,21 +107,20 @@ Return ONLY a JSON object with this exact structure:
 ```
 
 **Key Requirements:**
-- For "continuous" clips: segments array has 1 item
-- For "spliced" clips: segments array has 2 or more items
-- All timestamps in seconds (decimal precision)
-- Duration calculated as end_time - start_time for each segment
-- total_duration = sum of all segment durations
-- combined_transcript = all segments concatenated with proper spacing
-- virality_score: 0-100 (be honest about actual viral potential)
-- filename: descriptive, lowercase, spaces replaced with underscores, ends with .mp4
-- No additional text or explanations - ONLY the JSON response
+- For "continuous" clips: segments array has 1 item.
+- For "spliced" clips: segments array has 2 or more items.
+- All timestamps in seconds (decimal precision) and within {START_TIME}–{END_TIME}.
+- Duration = end_time - start_time for each segment; total_duration = sum(segments[].duration).
+- combined_transcript = segments concatenated with proper spacing.
+- virality_score: 0–100 (honest assessment of viral potential).
+- filename: descriptive, lowercase, underscores, ends with .mp4.
+- No additional text or explanations — ONLY the JSON response.
 
 **Filename Guidelines:**
-- Make filenames descriptive and engaging (2-6 words)
-- Use lowercase letters, numbers, and underscores only
-- Include the key emotion/event/action
-- End with .mp4 extension
-- Examples: "epic_rage_quit_losing_10_eth.mp4", "perfect_market_call_100x_prediction.mp4", "hilarious_reaction_to_price_crash.mp4"
+- Make filenames descriptive and engaging (2–6 words).
+- Use lowercase letters, numbers, and underscores only.
+- Include the key emotion/event/action.
+- End with .mp4 extension.
+- Examples: "epic_rage_quit_losing_10_eth.mp4", "perfect_market_call_100x_prediction.mp4", "hilarious_reaction_to_price_crash.mp4".
 
-Be authentic - only suggest clips that genuinely deserve to be shared. Use splicing when it makes the clip more compelling.
+Be authentic — only suggest clips that genuinely deserve to be shared. Use splicing when it improves clarity and momentum.
